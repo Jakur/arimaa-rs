@@ -40,8 +40,8 @@ pub fn bitScanForward(bitboard: u64) -> usize {
 }
 
 pub enum Side {
-    White,
-    Black,
+    White = 0,
+    Black = 1,
 }
 
 #[repr(u8)]
@@ -62,13 +62,18 @@ pub enum Piece {
     BElephant = 12,
 }
 
+pub enum Step {
+    Move(u8, u8, u8), // Source(0-63), Change(0-3), Displacement(0-4)?
+    Pass,
+}
+
 pub struct Position {
-    side: Side,
-    steps_left: i32,
-    frozen: u64,
-    placement: [u64; 2], // white, black bitboards
-    bitboards: [u64; 13],
-    pieces: [Piece; 64],
+    pub side: Side,
+    pub steps_left: i32,
+    pub frozen: u64,
+    pub placement: [u64; 2], // white, black bitboards
+    pub bitboards: [u64; 13],
+    pub pieces: [Piece; 64],
 }
 
 impl Position {
@@ -100,6 +105,29 @@ impl Position {
             pieces,
         }
     }
+    pub fn gen_moves(&self) -> Vec<Step> {
+        let mut moves = Vec::new();
+        // Compute frozen
+        let wneighbors = neighbors_of(self.placement[0]);
+        let bneighbors = neighbors_of(self.placement[1]);
+        let mut wstronger = self.placement[0];
+        let mut bstronger = self.placement[1];
+        let mut frozen = 0;
+        for pix in 1..7 {
+            // These masks are stronger relative to the current piece
+            wstronger ^= self.bitboards[pix];
+            bstronger ^= self.bitboards[pix + 6];
+            frozen |= self.bitboards[pix] & neighbors_of(bstronger) & (!wneighbors);
+            frozen |= self.bitboards[pix + 6] & neighbors_of(wstronger) & (!bneighbors);
+        }
+        moves // Todo complete
+    }
+    fn rabbit_steps(side: Side, index: u64) -> u64 {
+        let mut out = (index & NOT_A_FILE) << 1;
+        out |= (index & NOT_H_FILE) >> 1;
+        let s = side as u64;
+        0
+    }
     pub fn from_opening_str(opening: &str) -> Option<Position> {
         let lines: Vec<&str> = opening.lines().collect();
         let mut pieces = [Piece::Empty; 64];
@@ -130,15 +158,14 @@ impl Position {
                 } else {
                     assert!(val >= 7);
                 }
-                let index = match Self::alg_to_index(&chs[1..]) {
+                let index = match alg_to_index(&chs[1..]) {
                     Some(index) => index,
                     None => return None,
                 };
                 pieces[index] = Piece::from_usize(val).unwrap();
             }
         }
-        dbg!(pieces[0]);
-        let bitboards = match Self::bitboards_from_pieces(&pieces) {
+        let bitboards = match bitboards_from_pieces(&pieces) {
             Some(bb) => bb,
             None => return None,
         };
@@ -160,43 +187,48 @@ impl Position {
             pieces,
         })
     }
-    pub fn bitboards_from_pieces(pieces: &[Piece]) -> Option<[u64; 13]> {
-        if pieces.len() != 64 {
-            return None;
-        }
-        let mut bitboards = [0; 13];
-        for (index, piece) in pieces.iter().enumerate() {
-            let bit_index: u64 = 1 << index;
-            bitboards[*piece as usize] |= bit_index;
-        }
-        Some(bitboards)
+}
+
+pub fn neighbors_of(index: u64) -> u64 {
+    ((index & NOT_H_FILE) >> 1) | ((index & NOT_A_FILE) << 1) | (index >> 8) | (index << 8)
+}
+
+pub fn bitboards_from_pieces(pieces: &[Piece]) -> Option<[u64; 13]> {
+    if pieces.len() != 64 {
+        return None;
     }
-    pub fn alg_to_index(chs: &[char]) -> Option<usize> {
-        if chs.len() != 2 {
-            return None;
-        }
-        let col = match chs[0] {
-            'a' => 0,
-            'b' => 1,
-            'c' => 2,
-            'd' => 3,
-            'e' => 4,
-            'f' => 5,
-            'g' => 6,
-            'h' => 7,
-            _ => return None,
-        };
-        let row = match chs[1] {
-            '1' => 0,
-            '2' => 1,
-            '3' => 2,
-            '4' => 3,
-            '5' => 4,
-            '6' => 5,
-            '7' => 6,
-            '8' => 7,
-            _ => return None,
-        };
-        Some(col + row * 8)
+    let mut bitboards = [0; 13];
+    for (index, piece) in pieces.iter().enumerate() {
+        let bit_index: u64 = 1 << index;
+        bitboards[*piece as usize] |= bit_index;
     }
+    Some(bitboards)
+}
+pub fn alg_to_index(chs: &[char]) -> Option<usize> {
+    if chs.len() != 2 {
+        return None;
+    }
+    let col = match chs[0] {
+        'a' => 0,
+        'b' => 1,
+        'c' => 2,
+        'd' => 3,
+        'e' => 4,
+        'f' => 5,
+        'g' => 6,
+        'h' => 7,
+        _ => return None,
+    };
+    let row = match chs[1] {
+        '1' => 0,
+        '2' => 1,
+        '3' => 2,
+        '4' => 3,
+        '5' => 4,
+        '6' => 5,
+        '7' => 6,
+        '8' => 7,
+        _ => return None,
+    };
+    Some(col + row * 8)
 }
