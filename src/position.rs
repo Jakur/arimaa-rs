@@ -122,12 +122,6 @@ impl Position {
         }
         moves // Todo complete
     }
-    fn rabbit_steps(side: Side, index: u64) -> u64 {
-        let mut out = (index & NOT_A_FILE) << 1;
-        out |= (index & NOT_H_FILE) >> 1;
-        let s = side as u64;
-        0
-    }
     pub fn from_opening_str(opening: &str) -> Option<Position> {
         let lines: Vec<&str> = opening.lines().collect();
         let mut pieces = [Piece::Empty; 64];
@@ -189,6 +183,12 @@ impl Position {
     }
 }
 
+fn rabbit_steps(side: Side, index: u64) -> u64 {
+    let mut out = (index & NOT_A_FILE) << 1;
+    out |= (index & NOT_H_FILE) >> 1;
+    let s = side as u64;
+    0
+}
 pub fn neighbors_of(index: u64) -> u64 {
     ((index & NOT_H_FILE) >> 1) | ((index & NOT_A_FILE) << 1) | (index >> 8) | (index << 8)
 }
