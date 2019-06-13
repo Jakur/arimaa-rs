@@ -1,6 +1,7 @@
 pub mod position;
 #[cfg(test)]
 mod tests {
+    use crate::position;
     use crate::position::{neighbors_of, Position, Side};
     #[test]
     fn new_start() {
@@ -13,5 +14,10 @@ mod tests {
         let bneighbors = neighbors_of(pos.placement[1]);
         assert_eq!(wneighbors, 0xFFFFFF); // rows 1, 2, 3
         assert_eq!(bneighbors, 0xFFFFFF0000000000); // rows 6, 7, 8
+    }
+    #[test]
+    fn total_moves() {
+        let total = position::total_moves();
+        assert!(512 < total && total < 1569); // Somewhat loose bounds for sanity check
     }
 }

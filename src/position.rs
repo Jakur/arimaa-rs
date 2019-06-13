@@ -4,39 +4,48 @@ use num_traits::FromPrimitive;
 const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
-const B_FILE: u64 = 0x4040404040404040;
-const G_FILE: u64 = 0x0202020202020202;
+// const B_FILE: u64 = 0x4040404040404040;
+// const G_FILE: u64 = 0x0202020202020202;
 const H_FILE: u64 = 0x0101010101010101;
 const NOT_A_FILE: u64 = !A_FILE;
 const NOT_H_FILE: u64 = !H_FILE;
-const RANK_1: u64 = 0xFF;
-const RANK_2: u64 = 0xFF00;
-const RANK_7: u64 = 0xFF000000000000;
-const RANK_8: u64 = 0xFF00000000000000;
-const NOT_RANK_1: u64 = !RANK_1;
-const NOT_RANK_8: u64 = !RANK_8;
-const NOT_EDGE: u64 = NOT_A_FILE & NOT_H_FILE & NOT_RANK_1 & NOT_RANK_8;
+// const RANK_1: u64 = 0xFF;
+// const RANK_2: u64 = 0xFF00;
+// const RANK_7: u64 = 0xFF000000000000;
+// const RANK_8: u64 = 0xFF00000000000000;
+// const NOT_RANK_1: u64 = !RANK_1;
+// const NOT_RANK_8: u64 = !RANK_8;
+// const NOT_EDGE: u64 = NOT_A_FILE & NOT_H_FILE & NOT_RANK_1 & NOT_RANK_8;
 
-const TRAPS: u64 = 0x0000240000240000;
-const TRAP_C3: u64 = 0x200000;
-const TRAP_F3: u64 = 0x40000;
-const TRAP_C6: u64 = 0x200000000000;
-const TRAP_F6: u64 = 0x40000000000;
-const TRAP_F3_IX: u8 = 18;
-const TRAP_C3_IX: u8 = 21;
-const TRAP_F6_IX: u8 = 42;
-const TRAP_C6_IX: u8 = 45;
+// const TRAPS: u64 = 0x0000240000240000;
+// const TRAP_C3: u64 = 0x200000;
+// const TRAP_F3: u64 = 0x40000;
+// const TRAP_C6: u64 = 0x200000000000;
+// const TRAP_F6: u64 = 0x40000000000;
+// const TRAP_F3_IX: u8 = 18;
+// const TRAP_C3_IX: u8 = 21;
+// const TRAP_F6_IX: u8 = 42;
+// const TRAP_C6_IX: u8 = 45;
 
-const index64: [usize; 64] = [
+const INDEX64: [usize; 64] = [
     0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38,
     32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45, 25,
     39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63,
 ]; // Used for bitscanning
 
-pub fn bitScanForward(bitboard: u64) -> usize {
+pub fn bitscan_forward(bitboard: u64) -> usize {
     const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
     assert!(bitboard != 0);
-    index64[(((bitboard ^ (bitboard - 1)) * DEBRUIJIN64) >> 58) as usize]
+    INDEX64[(((bitboard ^ (bitboard - 1)) * DEBRUIJIN64) >> 58) as usize]
+}
+
+pub fn isolate_lsb(bitboard: u64) -> u64 {
+    bitboard & negate(bitboard)
+}
+
+pub fn negate(num: u64) -> u64 {
+    num.wrapping_neg().wrapping_add(1)
+    //num
 }
 
 pub enum Side {
@@ -90,7 +99,7 @@ impl Position {
             while bb != 0 {
                 let piecebit = bb & !bb; // LSB
                 bb ^= piecebit; // Set LSB to 0
-                let pieceix = bitScanForward(bb);
+                let pieceix = bitscan_forward(bb);
                 assert!(pieces[pieceix] == Piece::Empty);
                 pieces[pieceix] = Piece::from_usize(pix).unwrap();
             }
@@ -181,6 +190,45 @@ impl Position {
             pieces,
         })
     }
+}
+
+pub fn total_moves() -> u32 {
+    let mut grand_total = 1; // Initial pass move
+    let mut per_square = Vec::new();
+    let mut interior_count = 0;
+    for x in 0..64 {
+        let root: u64 = 1 << x;
+        let mut total = 0;
+        let mut root_neighbors = neighbors_of(root);
+        let num_r_neighbors = root_neighbors.count_ones();
+        total += num_r_neighbors; // Standard moves
+        while root_neighbors != 0 {
+            let lsb = isolate_lsb(root_neighbors);
+            assert_eq!(lsb.count_ones(), 1);
+            let num_neighbors = neighbors_of(lsb).count_ones() - 1; // Ignore root
+            assert!(1 <= num_neighbors && num_neighbors <= 3);
+            total += num_neighbors; // Pushes
+            total += num_r_neighbors - 1; // Pulls
+            root_neighbors &= root_neighbors - 1;
+        }
+        assert!(8 <= total && total <= 28);
+        if total == 28 {
+            interior_count += 1;
+        }
+        per_square.push(total);
+        grand_total += total;
+    }
+    assert_eq!(interior_count, 4 * 4);
+    println!("Each square {:?}", per_square);
+    let mut cumulative = 0;
+    for i in 0..per_square.len() {
+        let temp = per_square[i];
+        per_square[i] = cumulative;
+        cumulative += temp;
+    }
+    println!("Cumulative Offsets {:?}", per_square);
+    println!("Grand Total {}", grand_total);
+    return grand_total;
 }
 
 fn rabbit_steps(side: Side, index: u64) -> u64 {
