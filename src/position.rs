@@ -33,21 +33,24 @@ const INDEX64: [usize; 64] = [
     39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63,
 ]; // Used for bitscanning
 
+/// Gets the index of a single bit bitboard
 pub fn bitscan_forward(bitboard: u64) -> usize {
     const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
     assert!(bitboard != 0);
     INDEX64[(((bitboard ^ (bitboard - 1)) * DEBRUIJIN64) >> 58) as usize]
 }
 
+/// Isolates the least significant bit from a bitboard
 pub fn isolate_lsb(bitboard: u64) -> u64 {
     bitboard & negate(bitboard)
 }
 
+/// Negates a u64 with two's complement
 pub fn negate(num: u64) -> u64 {
     num.wrapping_neg().wrapping_add(1)
-    //num
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Side {
     White = 0,
     Black = 1,
@@ -71,8 +74,17 @@ pub enum Piece {
     BElephant = 12,
 }
 
+pub enum Direction {
+    North,
+    East,
+    South,
+    West,
+}
+
 pub enum Step {
-    Move(u8, u8, u8), // Source(0-63), Change(0-3), Displacement(0-4)?
+    Move(u64, u64),      // Source Dest
+    Push(u64, u64, u64), // Source Dest Displacement
+    Pull(u64, u64, u64), // Source Dest Pull_Target
     Pass,
 }
 
@@ -128,6 +140,15 @@ impl Position {
             bstronger ^= self.bitboards[pix + 6];
             frozen |= self.bitboards[pix] & neighbors_of(bstronger) & (!wneighbors);
             frozen |= self.bitboards[pix + 6] & neighbors_of(wstronger) & (!bneighbors);
+        }
+        //Generate normal steps
+        let active_pieces = self.placement[self.side as usize] & !frozen;
+        let iter = PieceIter::new(active_pieces);
+        for lsb in iter {
+            let movements = neighbors_of(lsb) & self.bitboards[0]; // Empty adjacent
+            for p in PieceIter::new(movements) {
+                moves.push(Step::Move(lsb, p));
+            }
         }
         moves // Todo complete
     }
@@ -231,12 +252,43 @@ pub fn total_moves() -> u32 {
     return grand_total;
 }
 
-fn rabbit_steps(side: Side, index: u64) -> u64 {
+/// An iterator over the individual bits of a bitboard
+struct PieceIter {
+    bitboard: u64,
+}
+
+impl PieceIter {
+    fn new(bitboard: u64) -> PieceIter {
+        PieceIter { bitboard }
+    }
+}
+
+impl Iterator for PieceIter {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<u64> {
+        if self.bitboard == 0 {
+            return None;
+        }
+        let lsb = isolate_lsb(self.bitboard);
+        self.bitboard &= !lsb;
+        Some(lsb)
+    }
+}
+
+pub fn move_to_index(step: Step) -> usize {
+    unimplemented!()
+}
+
+pub fn rabbit_steps(side: Side, index: u64) -> u64 {
     let mut out = (index & NOT_A_FILE) << 1;
     out |= (index & NOT_H_FILE) >> 1;
-    let s = side as u64;
-    0
+    let s = (side as u64) << 3;
+    out |= index << (s & 8); // If white
+    out |= index >> (!s & 8); // If black
+    out
 }
+
 pub fn neighbors_of(index: u64) -> u64 {
     ((index & NOT_H_FILE) >> 1) | ((index & NOT_A_FILE) << 1) | (index >> 8) | (index << 8)
 }
@@ -252,6 +304,7 @@ pub fn bitboards_from_pieces(pieces: &[Piece]) -> Option<[u64; 13]> {
     }
     Some(bitboards)
 }
+
 pub fn alg_to_index(chs: &[char]) -> Option<usize> {
     if chs.len() != 2 {
         return None;
