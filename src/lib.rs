@@ -1,4 +1,5 @@
 pub mod position;
+pub mod zobrist;
 #[cfg(test)]
 mod tests {
     use crate::position;
@@ -20,4 +21,15 @@ mod tests {
         let total = position::total_moves();
         assert!(512 < total && total < 1569); // Somewhat loose bounds for sanity check
     }
+    
+    #[test]
+    fn test_load_zobrist() {
+        assert_eq!(602977864700505253, crate::zobrist::get_zobrist(0, 0, 0))
+    }
+    // #[test]
+    // fn gen_zobrist() {
+    //     let name = concat!(file!(), ".zobrist");
+    //     let mut f = std::fs::File::create(name).unwrap();
+    //     crate::zobrist::write_zobrist(&mut f);
+    // }
 }
