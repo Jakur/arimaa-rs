@@ -128,6 +128,7 @@ impl Position {
     }
     pub fn gen_moves(&self) -> Vec<Step> {
         let mut moves = Vec::new();
+        let player_index = self.side as usize;
         // Compute frozen
         let wneighbors = neighbors_of(self.placement[0]);
         let bneighbors = neighbors_of(self.placement[1]);
@@ -142,10 +143,17 @@ impl Position {
             frozen |= self.bitboards[pix + 6] & neighbors_of(wstronger) & (!bneighbors);
         }
         //Generate normal steps
-        let active_pieces = self.placement[self.side as usize] & !frozen;
+        let active_pieces = self.placement[player_index] & !frozen;
         let iter = PieceIter::new(active_pieces);
         for lsb in iter {
-            let movements = neighbors_of(lsb) & self.bitboards[0]; // Empty adjacent
+            let movements = {
+                if lsb & self.bitboards[1 + player_index * 6] != 0 {
+                    // If rabbit
+                    rabbit_steps(self.side, lsb)
+                } else {
+                    neighbors_of(lsb) & self.bitboards[0] // Empty adjacent
+                }
+            };
             for p in PieceIter::new(movements) {
                 moves.push(Step::Move(lsb, p));
             }
@@ -280,17 +288,17 @@ pub fn move_to_index(step: Step) -> usize {
     unimplemented!()
 }
 
-pub fn rabbit_steps(side: Side, index: u64) -> u64 {
-    let mut out = (index & NOT_A_FILE) << 1;
-    out |= (index & NOT_H_FILE) >> 1;
+pub fn rabbit_steps(side: Side, lsb: u64) -> u64 {
+    let mut out = (lsb & NOT_A_FILE) << 1;
+    out |= (lsb & NOT_H_FILE) >> 1;
     let s = (side as u64) << 3;
-    out |= index << (s & 8); // If white
-    out |= index >> (!s & 8); // If black
+    out |= lsb << (s & 8); // If white
+    out |= lsb >> (!s & 8); // If black
     out
 }
 
-pub fn neighbors_of(index: u64) -> u64 {
-    ((index & NOT_H_FILE) >> 1) | ((index & NOT_A_FILE) << 1) | (index >> 8) | (index << 8)
+pub fn neighbors_of(lsb: u64) -> u64 {
+    ((lsb & NOT_H_FILE) >> 1) | ((lsb & NOT_A_FILE) << 1) | (lsb >> 8) | (lsb << 8)
 }
 
 pub fn bitboards_from_pieces(pieces: &[Piece]) -> Option<[u64; 13]> {
