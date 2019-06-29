@@ -21,7 +21,7 @@ mod tests {
         let total = position::total_moves();
         assert!(512 < total && total < 1569); // Somewhat loose bounds for sanity check
     }
-    
+
     #[test]
     fn test_load_zobrist() {
         assert_eq!(602977864700505253, crate::zobrist::get_zobrist(0, 0, 0))
@@ -32,4 +32,25 @@ mod tests {
     //     let mut f = std::fs::File::create(name).unwrap();
     //     crate::zobrist::write_zobrist(&mut f);
     // }
+    #[test]
+    fn test_cleanup() {
+        cleanup_gameroom_logs("/home/justin/Downloads/allgames201301.txt");
+    }
+    fn cleanup_gameroom_logs(fname: &str) {
+        use regex::Regex;
+
+        use std::fs::File;
+        use std::io::prelude::*;
+        let mut contents = String::new();
+        let mut f = File::open(fname).unwrap();
+        let re = Regex::new(r"game finished with result (.*?)\n").unwrap();
+        // Capture move numbers and individual steps
+        let captures = Regex::new(r"\b\d{1,3}[wb]|[RrCcDdHhMmEe][a-h]\d\w?\b").unwrap();
+        f.read_to_string(&mut contents).unwrap();
+        let mut split = re.split(&contents);
+        let sp = split.nth(101).unwrap(); // Arbitrary for testing
+        for c in captures.find_iter(sp) {
+            println!("{}", c.as_str());
+        }
+    }
 }
