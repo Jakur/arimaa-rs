@@ -33,21 +33,24 @@ const INDEX64: [usize; 64] = [
     39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63,
 ]; // Used for bitscanning
 
-/// Gets the index of a single bit bitboard
-pub fn bitscan_forward(bitboard: u64) -> usize {
-    const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
-    assert!(bitboard != 0);
-    INDEX64[(((bitboard ^ (bitboard - 1)) * DEBRUIJIN64) >> 58) as usize]
+pub trait Bitboard {
+    fn bitscan_forward(self) -> usize;
+    fn isolate_lsb(self) -> u64;
+    fn negate(self) -> u64;
 }
 
-/// Isolates the least significant bit from a bitboard
-pub fn isolate_lsb(bitboard: u64) -> u64 {
-    bitboard & negate(bitboard)
-}
-
-/// Negates a u64 with two's complement
-pub fn negate(num: u64) -> u64 {
-    num.wrapping_neg().wrapping_add(1)
+impl Bitboard for u64 {
+    fn bitscan_forward(self) -> usize {
+        const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
+        assert!(self != 0);
+        INDEX64[(((self ^ (self - 1)) * DEBRUIJIN64) >> 58) as usize]
+    }
+    fn isolate_lsb(self) -> u64 {
+        self & self.negate()
+    }
+    fn negate(self) -> u64 {
+        self.wrapping_neg().wrapping_add(1)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -111,7 +114,7 @@ impl Position {
             while bb != 0 {
                 let piecebit = bb & !bb; // LSB
                 bb ^= piecebit; // Set LSB to 0
-                let pieceix = bitscan_forward(bb);
+                let pieceix = bb.bitscan_forward();
                 assert!(pieces[pieceix] == Piece::Empty);
                 pieces[pieceix] = Piece::from_usize(pix).unwrap();
             }
@@ -232,7 +235,7 @@ pub fn total_moves() -> u32 {
         let num_r_neighbors = root_neighbors.count_ones();
         total += num_r_neighbors; // Standard moves
         while root_neighbors != 0 {
-            let lsb = isolate_lsb(root_neighbors);
+            let lsb = root_neighbors.isolate_lsb();
             assert_eq!(lsb.count_ones(), 1);
             let num_neighbors = neighbors_of(lsb).count_ones() - 1; // Ignore root
             assert!(1 <= num_neighbors && num_neighbors <= 3);
@@ -278,7 +281,7 @@ impl Iterator for PieceIter {
         if self.bitboard == 0 {
             return None;
         }
-        let lsb = isolate_lsb(self.bitboard);
+        let lsb = self.bitboard.isolate_lsb();
         self.bitboard &= !lsb;
         Some(lsb)
     }
