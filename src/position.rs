@@ -1,7 +1,7 @@
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
+//const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
 // const B_FILE: u64 = 0x4040404040404040;
@@ -86,7 +86,7 @@ pub enum Direction {
 
 pub enum Step {
     Move(u64, u64),      // Source Dest
-    Push(u64, u64, u64), // Source Dest Displacement
+    Push(u64, u64, u64), // Source Dest Displaced_Dest
     Pull(u64, u64, u64), // Source Dest Pull_Target
     Pass,
 }
@@ -138,10 +138,12 @@ impl Position {
         let mut wstronger = self.placement[0];
         let mut bstronger = self.placement[1];
         let mut frozen = 0;
+        let mut stronger = [0; 6]; // For push and pull computation
         for pix in 1..7 {
             // These masks are stronger relative to the current piece
             wstronger ^= self.bitboards[pix];
             bstronger ^= self.bitboards[pix + 6];
+            stronger[pix - 1] = wstronger | bstronger;
             frozen |= self.bitboards[pix] & neighbors_of(bstronger) & (!wneighbors);
             frozen |= self.bitboards[pix + 6] & neighbors_of(wstronger) & (!bneighbors);
         }
@@ -149,10 +151,10 @@ impl Position {
         let active_pieces = self.placement[player_index] & !frozen;
         let iter = PieceIter::new(active_pieces);
         for lsb in iter {
+            let is_rabbit = lsb & self.bitboards[1 + player_index * 6] != 0;
             let movements = {
-                if lsb & self.bitboards[1 + player_index * 6] != 0 {
-                    // If rabbit
-                    rabbit_steps(self.side, lsb)
+                if is_rabbit {
+                    rabbit_steps(self.side, lsb) & self.bitboards[0] // Empty adjacent
                 } else {
                     neighbors_of(lsb) & self.bitboards[0] // Empty adjacent
                 }
@@ -160,8 +162,31 @@ impl Position {
             for p in PieceIter::new(movements) {
                 moves.push(Step::Move(lsb, p));
             }
+
+            if is_rabbit || self.steps_left <= 1 {
+                continue; // Cannot push or pull
+            }
+            // Determine type of piece
+            let index = lsb.bitscan_forward();
+            let piece_index = self.pieces[index] as usize;
+            // -2 to offset both empty and rabbit not being in stronger
+            let moveable = !(stronger[piece_index - 2 - player_index * 6] | self.bitboards[0]);
+            for target in PieceIter::new(moveable) {
+                // Push
+                let adj_targets = neighbors_of(target) & self.bitboards[0];
+                for adj_lsb in PieceIter::new(adj_targets) {
+                    moves.push(Step::Push(lsb, target, adj_lsb));
+                }
+                // Pull
+                for p in PieceIter::new(movements) {
+                    moves.push(Step::Pull(lsb, p, target));
+                }
+            }
         }
-        moves // Todo complete
+        if self.steps_left != 4 {
+            moves.push(Step::Pass); // Defer checking zobrist
+        }
+        moves
     }
     pub fn from_opening_str(opening: &str) -> Option<Position> {
         let lines: Vec<&str> = opening.lines().collect();
@@ -173,7 +198,7 @@ impl Position {
             let split = lines[index].split_whitespace();
             for alg in split {
                 let chs: Vec<_> = alg.chars().collect();
-                let mut val = match chs[0] {
+                let val = match chs[0] {
                     'R' => 1,
                     'C' => 2,
                     'D' => 3,
