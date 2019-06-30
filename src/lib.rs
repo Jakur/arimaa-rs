@@ -43,14 +43,26 @@ mod tests {
         use std::io::prelude::*;
         let mut contents = String::new();
         let mut f = File::open(fname).unwrap();
-        let re = Regex::new(r"game finished with result (.*?)\n").unwrap();
+        let re_game = Regex::new(r"game finished with result (.*?)\n").unwrap();
         // Capture move numbers and individual steps
-        let captures = Regex::new(r"\b\d{1,3}[wb]|[RrCcDdHhMmEe][a-h]\d\w?\b").unwrap();
+        let re_steps = Regex::new(r"\d{1,3}[wb]|[RrCcDdHhMmEe][a-h]\d\w?").unwrap();
         f.read_to_string(&mut contents).unwrap();
-        let mut split = re.split(&contents);
+        let mut split = re_game.split(&contents);
         let sp = split.nth(101).unwrap(); // Arbitrary for testing
-        for c in captures.find_iter(sp) {
-            println!("{}", c.as_str());
+        let vec: Vec<_> = sp.split("\t1w ").collect();
+        let game_str = vec[vec.len() - 1];
+        let steps: Vec<_> = re_steps.find_iter(game_str).map(|c| c.as_str()).collect();
+        let mut last_move_str = "1w";
+        for s in steps.iter().rev() {
+            let first_c = s.chars().next();
+            if let Some(c) = first_c {
+                if c.is_digit(10) {
+                    // Last move indicator
+                    last_move_str = s;
+                    break;
+                }
+            }
         }
+        dbg!(last_move_str);
     }
 }
