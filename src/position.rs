@@ -40,6 +40,7 @@ pub trait Bitboard {
 }
 
 impl Bitboard for u64 {
+    /// Determines the square index of an isolated bit
     fn bitscan_forward(self) -> usize {
         const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
         assert!(self != 0);
@@ -85,9 +86,9 @@ pub enum Direction {
 }
 
 pub enum Step {
-    Move(u64, u64),      // Source Dest
-    Push(u64, u64, u64), // Source Dest Displaced_Dest
-    Pull(u64, u64, u64), // Source Dest Pull_Target
+    Move(u8, u8),  // Source Dest
+    Push(u8, u8),  // Source Dest of Pushed Piece
+    Place(u8, u8), // PieceId Dest
     Pass,
 }
 
@@ -97,6 +98,7 @@ pub struct Position {
     pub frozen: u64,
     pub placement: [u64; 2], // white, black bitboards
     pub bitboards: [u64; 13],
+    pub last_step: Option<Step>,
     pub pieces: [Piece; 64],
 }
 
@@ -126,12 +128,14 @@ impl Position {
             frozen: 0, // Todo fix
             placement,
             bitboards,
+            last_step: None,
             pieces,
         }
     }
     pub fn gen_moves(&self) -> Vec<Step> {
         let mut moves = Vec::new();
         let player_index = self.side as usize;
+        let opp_index = (player_index + 1) % 2;
         // Compute frozen
         let wneighbors = neighbors_of(self.placement[0]);
         let bneighbors = neighbors_of(self.placement[1]);
@@ -147,7 +151,17 @@ impl Position {
             frozen |= self.bitboards[pix] & neighbors_of(bstronger) & (!wneighbors);
             frozen |= self.bitboards[pix + 6] & neighbors_of(wstronger) & (!bneighbors);
         }
-        //Generate normal steps
+        // Continue push
+        if let Some(Step::Push(source, dest)) = self.last_step {
+            let pushed_piece_id = self.pieces[dest as usize] as u8;
+            let colorless = pushed_piece_id as usize - (6 * opp_index);
+            let followers = neighbors_of(index_to_lsb(source)) & stronger[colorless - 1];
+            for lsb in PieceIter::new(followers) {
+                moves.push(Step::Move(lsb.bitscan_forward() as u8, source));
+            }
+            return moves;
+        }
+        // Generate normal steps
         let active_pieces = self.placement[player_index] & !frozen;
         let iter = PieceIter::new(active_pieces);
         for lsb in iter {
@@ -160,7 +174,10 @@ impl Position {
                 }
             };
             for p in PieceIter::new(movements) {
-                moves.push(Step::Move(lsb, p));
+                moves.push(Step::Move(
+                    lsb.bitscan_forward() as u8,
+                    p.bitscan_forward() as u8,
+                ));
             }
 
             if is_rabbit || self.steps_left <= 1 {
@@ -170,21 +187,40 @@ impl Position {
             let index = lsb.bitscan_forward();
             let piece_index = self.pieces[index] as usize;
             // -2 to offset both empty and rabbit not being in stronger
-            let moveable = !(stronger[piece_index - 2 - player_index * 6] | self.bitboards[0]);
-            for target in PieceIter::new(moveable) {
+            let pushable =
+                !(stronger[piece_index - 2 - player_index * 6] & self.bitboards[opp_index]);
+            for target in PieceIter::new(pushable) {
                 // Push
                 let adj_targets = neighbors_of(target) & self.bitboards[0];
                 for adj_lsb in PieceIter::new(adj_targets) {
-                    moves.push(Step::Push(lsb, target, adj_lsb));
+                    moves.push(Step::Push(
+                        target.bitscan_forward() as u8,
+                        adj_lsb.bitscan_forward() as u8,
+                    ));
                 }
-                // Pull
-                for p in PieceIter::new(movements) {
-                    moves.push(Step::Pull(lsb, p, target));
+            }
+        }
+        if self.steps_left > 1 {
+            for pix in 1..7 {
+                // To be pushed we must have a stronger opponent piece adjacent
+                // to us, and we must have an empty tile adjacent to us
+                let opp_pix = pix + 6 * opp_index;
+                let pushing_candidates = stronger[pix] & self.placement[player_index];
+                let pushable = (neighbors_of(pushing_candidates) & self.bitboards[opp_pix])
+                    & neighbors_of(self.bitboards[0]);
+                let push_iter = PieceIter::new(pushable);
+                for lsb in push_iter {
+                    for target_lsb in PieceIter::new(neighbors_of(lsb) & self.bitboards[0]) {
+                        moves.push(Step::Push(
+                            lsb.bitscan_forward() as u8,
+                            target_lsb.bitscan_forward() as u8,
+                        ));
+                    }
                 }
             }
         }
         if self.steps_left != 4 {
-            moves.push(Step::Pass); // Defer checking zobrist
+            moves.push(Step::Pass); // Todo checking zobrist
         }
         moves
     }
@@ -244,6 +280,7 @@ impl Position {
             frozen: 0,
             placement,
             bitboards,
+            last_step: None,
             pieces,
         })
     }
@@ -323,6 +360,10 @@ pub fn rabbit_steps(side: Side, lsb: u64) -> u64 {
     out |= lsb << (s & 8); // If white
     out |= lsb >> (!s & 8); // If black
     out
+}
+
+pub fn index_to_lsb(index: u8) -> u64 {
+    1 << index
 }
 
 pub fn neighbors_of(lsb: u64) -> u64 {
