@@ -23,6 +23,13 @@ mod tests {
     }
 
     #[test]
+    fn test_pos_notation() {
+        let pos1 = include_str!("test_games/pos1.txt");
+        let pos = Position::from_pos_notation(pos1.to_string()).unwrap();
+        println!("{:?}", &pos.pieces[..]);
+    }
+
+    #[test]
     fn test_load_zobrist() {
         assert_eq!(602977864700505253, crate::zobrist::get_zobrist(0, 0, 0))
     }

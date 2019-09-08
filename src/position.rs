@@ -1,6 +1,7 @@
+use failure::{bail, format_err, Error};
+
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-
 //const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
@@ -118,7 +119,7 @@ impl Position {
                 bb ^= piecebit; // Set LSB to 0
                 let pieceix = bb.bitscan_forward();
                 assert!(pieces[pieceix] == Piece::Empty);
-                pieces[pieceix] = Piece::from_usize(pix).unwrap();
+                pieces[pieceix] = Piece::from_u8(pix as u8).unwrap();
             }
         }
 
@@ -131,6 +132,64 @@ impl Position {
             last_step: None,
             pieces,
         }
+    }
+    pub fn from_pieces(side: Side, steps_left: i32, pieces: [Piece; 64]) -> Position {
+        let mut placement: [u64; 2] = [0, 0];
+        let mut bitboards: [u64; 13] = [0; 13];
+        let mut bit_index = 1;
+        for piece in pieces.iter() {
+            let piece_index = *piece as usize;
+            bitboards[piece_index] |= bit_index;
+
+            bit_index = bit_index << 1;
+        }
+        for i in 1..=6 {
+            placement[0] |= bitboards[i];
+            placement[1] |= bitboards[i + 6];
+        }
+        Position {
+            side,
+            steps_left,
+            frozen: 0, // Todo fix
+            placement,
+            bitboards,
+            last_step: None,
+            pieces,
+        }
+    }
+    pub fn from_pos_notation(notation: String) -> Result<Position, Error> {
+        let lines: Vec<_> = notation.lines().collect();
+        // Todo read initial moves
+        let mut info_row = lines[0].chars();
+        let side = info_row.nth(1).ok_or(format_err!("Invalid side to move"))?;
+        let side = match side {
+            'g' | 'w' => Side::White,
+            's' | 'b' => Side::Black,
+            _ => bail!("Invalid side to move"),
+        };
+        let mut pieces: [Piece; 64] = [Piece::Empty; 64];
+        let mut index = 2 * alg_to_index(&['a', '8']).unwrap();
+        for line_index in 2..10 {
+            let iter = lines
+                .get(line_index)
+                .and_then(|x| x.split("|").nth(1))
+                .ok_or(format_err!("Invalid board notation"))?
+                .chars();
+            for c in iter.take(16) {
+                // Each has one extra whitespace
+                let piece = Piece::from_u8(piece_char_index(c));
+                println!("{}", index);
+                match piece {
+                    Some(piece) => pieces[index / 2] = piece,
+                    None => unreachable!(), // Wildcard char match returns 0
+                }
+                index += 1;
+            }
+            if index >= 32 {
+                index -= 32;
+            }
+        }
+        Ok(Self::from_pieces(side, 4, pieces))
     }
     pub fn gen_steps(&self) -> Vec<Step> {
         let mut moves = Vec::new();
@@ -233,21 +292,7 @@ impl Position {
             let split = lines[index].split_whitespace();
             for alg in split {
                 let chs: Vec<_> = alg.chars().collect();
-                let val = match chs[0] {
-                    'R' => 1,
-                    'C' => 2,
-                    'D' => 3,
-                    'H' => 4,
-                    'M' => 5,
-                    'E' => 6,
-                    'r' => 7,
-                    'c' => 8,
-                    'd' => 9,
-                    'h' => 10,
-                    'm' => 11,
-                    'e' => 12,
-                    _ => return None,
-                };
+                let val = piece_char_index(chs[0]);
                 if let Side::White = side {
                     assert!(val < 7);
                 } else {
@@ -257,7 +302,7 @@ impl Position {
                     Some(index) => index,
                     None => return None,
                 };
-                pieces[index] = Piece::from_usize(val).unwrap();
+                pieces[index] = Piece::from_u8(val).unwrap();
             }
         }
         let bitboards = match bitboards_from_pieces(&pieces) {
@@ -379,6 +424,24 @@ pub fn bitboards_from_pieces(pieces: &[Piece]) -> Option<[u64; 13]> {
         bitboards[*piece as usize] |= bit_index;
     }
     Some(bitboards)
+}
+
+pub fn piece_char_index(piece: char) -> u8 {
+    match piece {
+        'R' => 1,
+        'C' => 2,
+        'D' => 3,
+        'H' => 4,
+        'M' => 5,
+        'E' => 6,
+        'r' => 7,
+        'c' => 8,
+        'd' => 9,
+        'h' => 10,
+        'm' => 11,
+        'e' => 12,
+        _ => 0, // Empty piece otherwise
+    }
 }
 
 pub fn alg_to_index(chs: &[char]) -> Option<usize> {
