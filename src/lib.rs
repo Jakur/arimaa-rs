@@ -27,6 +27,9 @@ mod tests {
         let pos1 = include_str!("test_games/pos1.txt");
         let pos = Position::from_pos_notation(pos1.to_string()).unwrap();
         println!("{:?}", &pos.pieces[..]);
+        let note = pos.to_pos_notation();
+        println!("{}", note);
+        assert_eq!(pos1, note);
     }
 
     #[test]

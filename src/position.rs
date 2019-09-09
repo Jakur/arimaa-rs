@@ -2,6 +2,7 @@ use failure::{bail, format_err, Error};
 
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use std::fmt;
 //const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
@@ -77,6 +78,33 @@ pub enum Piece {
     BHorse,
     BCamel,
     BElephant = 12,
+}
+
+impl From<Piece> for char {
+    fn from(item: Piece) -> char {
+        match item {
+            Piece::Empty => ' ',
+            Piece::WRabbit => 'R',
+            Piece::WCat => 'C',
+            Piece::WDog => 'D',
+            Piece::WHorse => 'H',
+            Piece::WCamel => 'M',
+            Piece::WElephant => 'E',
+            Piece::BRabbit => 'r',
+            Piece::BCat => 'c',
+            Piece::BDog => 'd',
+            Piece::BHorse => 'h',
+            Piece::BCamel => 'm',
+            Piece::BElephant => 'e',
+        }
+    }
+}
+
+impl fmt::Display for Piece {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let ch = char::from(*self);
+        write!(f, "{}", ch)
+    }
 }
 
 pub enum Direction {
@@ -160,8 +188,12 @@ impl Position {
     pub fn from_pos_notation(notation: String) -> Result<Position, Error> {
         let lines: Vec<_> = notation.lines().collect();
         // Todo read initial moves
-        let mut info_row = lines[0].chars();
-        let side = info_row.nth(1).ok_or(format_err!("Invalid side to move"))?;
+        let mut turn_info: Vec<char> = lines[0]
+            .split_whitespace()
+            .next()
+            .map(|s| s.chars().collect())
+            .ok_or(format_err!("Invalid board notation"))?;
+        let side = turn_info.pop().ok_or(format_err!("Invalid side to move"))?;
         let side = match side {
             'g' | 'w' => Side::White,
             's' | 'b' => Side::Black,
@@ -178,7 +210,7 @@ impl Position {
             for c in iter.take(16) {
                 // Each has one extra whitespace
                 let piece = Piece::from_u8(piece_char_index(c));
-                println!("{}", index);
+                //println!("{}", index);
                 match piece {
                     Some(piece) => pieces[index / 2] = piece,
                     None => unreachable!(), // Wildcard char match returns 0
@@ -190,6 +222,49 @@ impl Position {
             }
         }
         Ok(Self::from_pieces(side, 4, pieces))
+    }
+    pub fn to_pos_notation(&self) -> String {
+        let top_bot = " +-----------------+\n";
+        let end = "   a b c d e f g h\n";
+        let mut rows = Vec::with_capacity(8);
+        let mut ptr = alg_to_index(&['a', '8']).unwrap();
+        for row_num in (1..=8).rev() {
+            let r = &self.pieces[ptr..ptr + 8];
+            let c_col = match r[2] {
+                Piece::Empty if row_num == 6 || row_num == 3 => {
+                    'x' // Trap
+                },
+                _ => r[2].into()
+            };
+            let f_col = match r[5] {
+                Piece::Empty if row_num == 6 || row_num == 3 => {
+                    'x' // Trap
+                },
+                _ => r[5].into()
+            };
+            let row_string = format!(
+                "{}| {} {} {} {} {} {} {} {} |\n",
+                row_num, r[0], r[1], c_col, r[3], r[4], f_col, r[6], r[7]
+            );
+            rows.push(row_string);
+            if ptr >= 8 {
+                ptr -= 8;
+            }
+        }
+        format!(
+            "7g Da1n Cc1n\n{}{}{}{}{}{}{}{}{}{}{}",
+            top_bot,
+            rows[0],
+            rows[1],
+            rows[2],
+            rows[3],
+            rows[4],
+            rows[5],
+            rows[6],
+            rows[7],
+            top_bot,
+            end
+        )
     }
     pub fn gen_steps(&self) -> Vec<Step> {
         let mut moves = Vec::new();
