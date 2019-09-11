@@ -114,11 +114,65 @@ pub enum Direction {
     West,
 }
 
+impl fmt::Display for Direction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let dir = match self {
+            Direction::North => 'n',
+            Direction::East => 'e',
+            Direction::South => 's',
+            Direction::West => 'w',
+        };
+        write!(f, "{}", dir)
+    }
+}
+
 pub enum Step {
-    Move(u8, u8),  // Source Dest
-    Push(u8, u8),  // Source Dest of Pushed Piece
-    Place(u8, u8), // PieceId Dest
+    Move(Piece, u8, u8), // Piece Source Dest
+    Push(Piece, u8, u8), // Piece Source Dest of Pushed Piece
+    Place(Piece, u8),    // Piece Dest
+    Remove(Piece, u8),   // Piece Square (due to trap)
     Pass,
+}
+
+impl fmt::Display for Step {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
+                let piece = char::from(*p);
+                let (col, row) = index_to_alg(*source);
+                let dir = {
+                    if dest > source {
+                        if dest - source == 1 {
+                            Direction::East
+                        } else {
+                            // 8
+                            Direction::North
+                        }
+                    } else {
+                        if source - dest == 1 {
+                            Direction::West
+                        } else {
+                            // 8
+                            Direction::East
+                        }
+                    }
+                };
+                write!(f, "{}{}{}{}", piece, col, row, dir)
+            }
+            Step::Place(p, sq) => {
+                let piece = char::from(*p);
+                let (col, row) = index_to_alg(*sq);
+                write!(f, "{}{}{}", piece, col, row)
+            }
+            Step::Remove(p, sq) => {
+                let piece = char::from(*p);
+                let (col, row) = index_to_alg(*sq);
+                write!(f, "{}{}{}x", piece, col, row)
+
+            }
+            Step::Pass => write!(f, ""),
+        }
+    }
 }
 
 pub struct Position {
@@ -233,14 +287,14 @@ impl Position {
             let c_col = match r[2] {
                 Piece::Empty if row_num == 6 || row_num == 3 => {
                     'x' // Trap
-                },
-                _ => r[2].into()
+                }
+                _ => r[2].into(),
             };
             let f_col = match r[5] {
                 Piece::Empty if row_num == 6 || row_num == 3 => {
                     'x' // Trap
-                },
-                _ => r[5].into()
+                }
+                _ => r[5].into(),
             };
             let row_string = format!(
                 "{}| {} {} {} {} {} {} {} {} |\n",
@@ -287,18 +341,19 @@ impl Position {
         }
         match self.last_step {
             // Continue push
-            Some(Step::Push(source, dest)) => {
-                let pushed_piece_id = self.pieces[dest as usize] as u8;
+            Some(Step::Push(p, source, _dest)) => {
+                let pushed_piece_id = p as u8;
                 let colorless = pushed_piece_id as usize - (6 * opp_index);
                 let followers = neighbors_of(index_to_lsb(source)) & stronger[colorless - 1];
                 for lsb in PieceIter::new(followers) {
-                    moves.push(Step::Move(lsb.bitscan_forward() as u8, source));
+                    let sq = lsb.bitscan_forward();
+                    moves.push(Step::Move(self.pieces[sq], sq as u8, source));
                 }
                 return moves;
             }
             // Consider pull
-            Some(Step::Move(source, dest)) => {
-                let puller_type = self.pieces[dest as usize] as u8;
+            Some(Step::Move(p, source, _dest)) => {
+                let puller_type = p as u8;
                 let colorless = puller_type as usize - (6 * opp_index);
                 if colorless > 1 {
                     // is not rabbit
@@ -307,7 +362,8 @@ impl Position {
                         & self.placement[opp_index]
                         & !stronger[colorless - 2];
                     for lsb in PieceIter::new(candidates) {
-                        moves.push(Step::Move(lsb.bitscan_forward() as u8, source));
+                        let sq = lsb.bitscan_forward();
+                        moves.push(Step::Move(self.pieces[sq], sq as u8, source));
                     }
                 }
             }
@@ -326,8 +382,10 @@ impl Position {
                 }
             };
             for p in PieceIter::new(movements) {
+                let sq = lsb.bitscan_forward();
                 moves.push(Step::Move(
-                    lsb.bitscan_forward() as u8,
+                    self.pieces[sq],
+                    sq as u8,
                     p.bitscan_forward() as u8,
                 ));
             }
@@ -344,8 +402,10 @@ impl Position {
                 let push_iter = PieceIter::new(pushable);
                 for lsb in push_iter {
                     for target_lsb in PieceIter::new(neighbors_of(lsb) & self.bitboards[0]) {
+                        let sq = lsb.bitscan_forward();
                         moves.push(Step::Push(
-                            lsb.bitscan_forward() as u8,
+                            self.pieces[sq],
+                            sq as u8,
                             target_lsb.bitscan_forward() as u8,
                         ));
                     }
@@ -468,10 +528,6 @@ impl Iterator for PieceIter {
     }
 }
 
-pub fn move_to_index(step: Step) -> usize {
-    unimplemented!()
-}
-
 pub fn rabbit_steps(side: Side, lsb: u64) -> u64 {
     let mut out = (lsb & NOT_A_FILE) << 1;
     out |= (lsb & NOT_H_FILE) >> 1;
@@ -517,6 +573,22 @@ pub fn piece_char_index(piece: char) -> u8 {
         'e' => 12,
         _ => 0, // Empty piece otherwise
     }
+}
+
+pub fn index_to_alg(index: u8) -> (char, u8) {
+    let col = match index % 8 {
+        0 => 'a',
+        1 => 'b',
+        2 => 'c',
+        3 => 'd',
+        4 => 'e',
+        5 => 'f',
+        6 => 'g',
+        7 => 'h',
+        _ => unreachable!(),
+    };
+    let row = (index / 8) + 1; // 1 indexed
+    (col, row)
 }
 
 pub fn alg_to_index(chs: &[char]) -> Option<usize> {

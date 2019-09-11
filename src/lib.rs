@@ -1,9 +1,10 @@
+pub mod game;
 pub mod position;
 pub mod zobrist;
 #[cfg(test)]
 mod tests {
     use crate::position;
-    use crate::position::{neighbors_of, Position, Side};
+    use crate::position::{neighbors_of, Position, Side, Step};
     #[test]
     fn new_start() {
         let op = "Ra1 Db1 Rc1 Rd1 De1 Rf1 Cg1 Rh1 Ra2 Hb2 Cc2 Ed2 Me2 Rf2 Hg2 Rh2
@@ -30,6 +31,10 @@ mod tests {
         let note = pos.to_pos_notation();
         println!("{}", note);
         assert_eq!(pos1, note);
+        assert_eq!(
+            "dc2e",
+            format!("{}", Step::Move(position::Piece::BDog, 10, 11))
+        )
     }
 
     #[test]
