@@ -126,6 +126,7 @@ impl fmt::Display for Direction {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Step {
     Move(Piece, u8, u8), // Piece Source Dest
     Push(Piece, u8, u8), // Piece Source Dest of Pushed Piece
@@ -175,10 +176,10 @@ impl fmt::Display for Step {
     }
 }
 
+#[derive(Clone)]
 pub struct Position {
     pub side: Side,
     pub steps_left: i32,
-    pub frozen: u64,
     pub placement: [u64; 2], // white, black bitboards
     pub bitboards: [u64; 13],
     pub last_step: Option<Step>,
@@ -208,7 +209,6 @@ impl Position {
         Position {
             side,
             steps_left,
-            frozen: 0, // Todo fix
             placement,
             bitboards,
             last_step: None,
@@ -232,7 +232,6 @@ impl Position {
         Position {
             side,
             steps_left,
-            frozen: 0, // Todo fix
             placement,
             bitboards,
             last_step: None,
@@ -456,7 +455,6 @@ impl Position {
         Some(Position {
             side: Side::White,
             steps_left: 4,
-            frozen: 0,
             placement,
             bitboards,
             last_step: None,
