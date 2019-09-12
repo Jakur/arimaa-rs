@@ -4,7 +4,7 @@ pub mod zobrist;
 #[cfg(test)]
 mod tests {
     use crate::position;
-    use crate::position::{neighbors_of, Position, Side, Step};
+    use crate::position::{neighbors_of, Piece, Position, Step};
     #[test]
     fn new_start() {
         let op = "Ra1 Db1 Rc1 Rd1 De1 Rf1 Cg1 Rh1 Ra2 Hb2 Cc2 Ed2 Me2 Rf2 Hg2 Rh2
@@ -25,23 +25,65 @@ mod tests {
 
     #[test]
     fn test_pos_notation() {
-        let pos1 = include_str!("test_games/pos1.txt");
-        let pos = Position::from_pos_notation(pos1.to_string()).unwrap();
+        use std::collections::HashSet;
+        let text_pos = include_str!("test_games/pos1.txt");
+        let mut pos = Position::from_pos_notation(text_pos.to_string()).unwrap();
+        pos.steps_left = 1;
         println!("{:?}", &pos.pieces[..]);
         let note = pos.to_pos_notation();
         println!("{}", note);
-        assert_eq!(pos1, note);
+        assert_eq!(text_pos, note);
         assert_eq!(
             "dc2e",
             format!("{}", Step::Move(position::Piece::BDog, 10, 11))
         );
         let steps = pos.gen_steps();
+        let correct_steps: HashSet<_> = include_str!("test_games/moves.txt")
+            .to_string()
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
         println!("Number of steps: {}", steps.len());
+        let found_steps: HashSet<_> = steps.iter().map(|s| format!("{}", s)).collect();
+        // for s in steps {
+        //     println!("{}", s);
+        // }
+        let left = correct_steps.difference(&found_steps);
+        println!("Correct but not found: ");
+        for val in left {
+            println!("{}", val);
+        }
+        let right = found_steps.difference(&correct_steps);
+        println!("\nFound but not correct: ");
+        for val in right {
+            println!("{}", val)
+        }
+        let index = position::alg_to_index(&['f', '3']).unwrap();
+        let lsb = position::index_to_lsb(index as u8);
+        assert_eq!(position::Piece::WHorse, pos.pieces[index]);
+        //assert!(lsb & pos.bitboards[0] == 0)
     }
-
     #[test]
-    fn test_load_zobrist() {
-        assert_eq!(602977864700505253, crate::zobrist::get_zobrist(0, 0, 0))
+    fn test_bit_tricks() {
+        use position::Bitboard;
+        let t1 = 0b0110;
+        let t2 = 0b1111;
+        let t3 = 0b1000_0000;
+        assert_eq!(t1.bitscan_forward(), 1);
+        assert_eq!(t2.bitscan_forward(), 0);
+        assert_eq!(t3.bitscan_forward(), 7);
+        let index = position::alg_to_index(&['f', '3']).unwrap();
+        println!("{}", index);
+        println!("{:b}", position::index_to_lsb(index as u8));
+    }
+    #[test]
+    fn test_step_display() {
+        use position::alg_to_index;
+        let source = alg_to_index(&['c', '2']).unwrap();
+        let dest = alg_to_index(&['c', '1']).unwrap();
+        let step = Step::Move(Piece::WCat, source as u8, dest as u8);
+        println!("{} -> {}", source, dest);
+        assert_eq!(format!("{}", step), "Cc2s".to_string());
     }
     // #[test]
     // fn gen_zobrist() {

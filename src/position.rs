@@ -1,5 +1,7 @@
 use failure::{bail, format_err, Error};
 
+use bitintr::Tzcnt;
+
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::fmt;
@@ -44,10 +46,11 @@ pub trait Bitboard {
 impl Bitboard for u64 {
     /// Determines the square index of an isolated bit
     fn bitscan_forward(self) -> usize {
-        const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
+        // const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
         assert!(self != 0);
         //INDEX64[(((self ^ (self - 1)) * DEBRUIJIN64) >> 58) as usize]
-        INDEX64[((self * DEBRUIJIN64) >> 58) as usize]
+        // INDEX64[((self * DEBRUIJIN64) >> 58) as usize]
+        self.tzcnt() as usize
     }
     fn isolate_lsb(self) -> u64 {
         self & self.wrapping_neg()
@@ -155,7 +158,7 @@ impl fmt::Display for Step {
                             Direction::West
                         } else {
                             // 8
-                            Direction::East
+                            Direction::South
                         }
                     }
                 };
@@ -172,7 +175,7 @@ impl fmt::Display for Step {
                 write!(f, "{}{}{}x", piece, col, row)
 
             }
-            Step::Pass => write!(f, ""),
+            Step::Pass => write!(f, "[Pass]"),
         }
     }
 }
@@ -382,7 +385,7 @@ impl Position {
                 }
             };
             for p in PieceIter::new(movements) {
-                if p == 0 {
+                if p.bitscan_forward() == 21 {
                     dbg!(format!("WTF! Movements: {:#b}", movements));
                 }
                 let sq = lsb.bitscan_forward();
@@ -399,7 +402,7 @@ impl Position {
                 // To be pushed we must have a stronger opponent piece adjacent
                 // to us, and we must have an empty tile adjacent to us
                 let opp_pix = pix + 6 * opp_index;
-                let pushing_candidates = stronger[pix] & self.placement[player_index];
+                let pushing_candidates = stronger[pix - 1] & self.placement[player_index];
                 let pushable = (neighbors_of(pushing_candidates) & self.bitboards[opp_pix])
                     & neighbors_of(self.bitboards[0]);
                 let push_iter = PieceIter::new(pushable);
@@ -568,8 +571,8 @@ pub fn rabbit_steps(side: Side, lsb: u64) -> u64 {
     let mut out = (lsb & NOT_A_FILE) << 1;
     out |= (lsb & NOT_H_FILE) >> 1;
     let s = (side as u64) << 3;
-    out |= lsb << (s & 8); // If white
-    out |= lsb >> (!s & 8); // If black
+    out |= lsb >> (s & 8); // If white
+    out |= lsb << (!s & 8); // If black
     out
 }
 
