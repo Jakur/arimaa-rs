@@ -34,7 +34,9 @@ mod tests {
         assert_eq!(
             "dc2e",
             format!("{}", Step::Move(position::Piece::BDog, 10, 11))
-        )
+        );
+        let steps = pos.gen_steps();
+        println!("Number of steps: {}", steps.len());
     }
 
     #[test]

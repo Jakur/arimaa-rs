@@ -46,13 +46,14 @@ impl Bitboard for u64 {
     fn bitscan_forward(self) -> usize {
         const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
         assert!(self != 0);
-        INDEX64[(((self ^ (self - 1)) * DEBRUIJIN64) >> 58) as usize]
+        //INDEX64[(((self ^ (self - 1)) * DEBRUIJIN64) >> 58) as usize]
+        INDEX64[((self * DEBRUIJIN64) >> 58) as usize]
     }
     fn isolate_lsb(self) -> u64 {
-        self & self.negate()
+        self & self.wrapping_neg()
     }
     fn negate(self) -> u64 {
-        self.wrapping_neg().wrapping_add(1)
+        self.wrapping_neg()
     }
 }
 
@@ -381,6 +382,9 @@ impl Position {
                 }
             };
             for p in PieceIter::new(movements) {
+                if p == 0 {
+                    dbg!(format!("WTF! Movements: {:#b}", movements));
+                }
                 let sq = lsb.bitscan_forward();
                 moves.push(Step::Move(
                     self.pieces[sq],
@@ -415,6 +419,40 @@ impl Position {
             moves.push(Step::Pass); // Todo checking zobrist
         }
         moves
+    }
+    pub fn do_step(&mut self, step: Step) {
+        // Todo finish
+        match step {
+            Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
+                let pix = p as usize;
+                self.pieces[source as usize] = Piece::Empty;
+                self.pieces[dest as usize] = p;
+                let change = index_to_lsb(source) & index_to_lsb(dest);
+                // xor out relevant changes
+                self.bitboards[pix] ^= change;
+                if pix <= 6 {
+                    self.placement[0] ^= change;
+                } else {
+                    self.placement[1] ^= change;
+                }
+                self.bitboards[0] ^= change;
+                // Check traps
+                for trap_sq in &[18, 21, 42, 45] {
+                    let pix = self.pieces[*trap_sq] as usize;
+                    let color = {
+                        if pix == 0 {
+                            continue; // We don't care if trap is empty
+                        } else if pix <= 6 {
+                            0
+                        } else {
+                            1
+                        }
+                    };
+
+                }
+            }
+            _ => {}
+        }
     }
     pub fn from_opening_str(opening: &str) -> Option<Position> {
         let lines: Vec<&str> = opening.lines().collect();
@@ -503,12 +541,12 @@ pub fn total_moves() -> u32 {
 }
 
 /// An iterator over the individual bits of a bitboard
-struct PieceIter {
+pub struct PieceIter {
     bitboard: u64,
 }
 
 impl PieceIter {
-    fn new(bitboard: u64) -> PieceIter {
+    pub fn new(bitboard: u64) -> PieceIter {
         PieceIter { bitboard }
     }
 }
@@ -521,7 +559,7 @@ impl Iterator for PieceIter {
             return None;
         }
         let lsb = self.bitboard.isolate_lsb();
-        self.bitboard &= !lsb;
+        self.bitboard = self.bitboard ^ lsb;
         Some(lsb)
     }
 }
