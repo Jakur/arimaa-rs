@@ -213,7 +213,7 @@ impl Position {
                 pieces[pieceix] = Piece::from_u8(pix as u8).unwrap();
             }
         }
-        let hash = compute_hash(&pieces);
+        let hash = compute_hash(&pieces, side);
         Position {
             side,
             steps_left,
@@ -239,7 +239,7 @@ impl Position {
             placement[0] |= bitboards[i];
             placement[1] |= bitboards[i + 6];
         }
-        let hash = compute_hash(&pieces);
+        let hash = compute_hash(&pieces, side);
         Position {
             side,
             steps_left,
@@ -502,7 +502,7 @@ impl Position {
             | bitboards[10]
             | bitboards[11]
             | bitboards[12];
-        let hash = compute_hash(&pieces);
+        let hash = compute_hash(&pieces, Side::White);
         Some(Position {
             side: Side::White,
             steps_left: 4,

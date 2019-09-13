@@ -5,20 +5,24 @@ use rand::SeedableRng;
 use std::fs::File;
 use std::io::Write;
 
-use crate::position::{Piece, Step};
+use crate::position::{Piece, Step, Side};
 
 const NUM_PIECES: usize = 12; // Empty is not counted
 const NUM_SQUARES: usize = 64;
 
 include!("table_zobrist.rs");
 
-pub fn compute_hash(board: &[Piece; 64]) -> u64 {
+pub fn compute_hash(board: &[Piece; 64], side: Side) -> u64 {
     let mut hash = 0;
     for (square, p) in board.iter().enumerate() {
         let p = *p as usize;
         if p != 0 {
             hash ^= get_zobrist(square, p);
         }
+    }
+    match side {
+        Side::White => hash ^= SIDE_TO_MOVE[0],
+        Side::Black => hash ^= SIDE_TO_MOVE[1],
     }
     hash
 }
