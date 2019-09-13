@@ -5,6 +5,8 @@ use bitintr::Tzcnt;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::fmt;
+
+use crate::zobrist::{compute_hash, update_hash};
 //const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
@@ -188,6 +190,8 @@ pub struct Position {
     pub bitboards: [u64; 13],
     pub last_step: Option<Step>,
     pub pieces: [Piece; 64],
+    pub initial_hash: u64,
+    pub current_hash: u64,
 }
 
 impl Position {
@@ -209,7 +213,7 @@ impl Position {
                 pieces[pieceix] = Piece::from_u8(pix as u8).unwrap();
             }
         }
-
+        let hash = compute_hash(&pieces);
         Position {
             side,
             steps_left,
@@ -217,6 +221,8 @@ impl Position {
             bitboards,
             last_step: None,
             pieces,
+            initial_hash: hash,
+            current_hash: hash,
         }
     }
     pub fn from_pieces(side: Side, steps_left: i32, pieces: [Piece; 64]) -> Position {
@@ -233,6 +239,7 @@ impl Position {
             placement[0] |= bitboards[i];
             placement[1] |= bitboards[i + 6];
         }
+        let hash = compute_hash(&pieces);
         Position {
             side,
             steps_left,
@@ -240,6 +247,8 @@ impl Position {
             bitboards,
             last_step: None,
             pieces,
+            initial_hash: hash,
+            current_hash: hash,
         }
     }
     pub fn from_pos_notation(notation: String) -> Result<Position, Error> {
@@ -493,6 +502,7 @@ impl Position {
             | bitboards[10]
             | bitboards[11]
             | bitboards[12];
+        let hash = compute_hash(&pieces);
         Some(Position {
             side: Side::White,
             steps_left: 4,
@@ -500,6 +510,8 @@ impl Position {
             bitboards,
             last_step: None,
             pieces,
+            initial_hash: hash,
+            current_hash: hash,
         })
     }
 }

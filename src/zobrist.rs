@@ -5,14 +5,41 @@ use rand::SeedableRng;
 use std::fs::File;
 use std::io::Write;
 
-const NUM_COLORS: usize = 2;
-const NUM_PIECES: usize = 13;
+use crate::position::{Piece, Step};
+
+const NUM_PIECES: usize = 12; // Empty is not counted
 const NUM_SQUARES: usize = 64;
 
 include!("table_zobrist.rs");
 
-pub fn get_zobrist(sq: usize, piece: usize, color: usize) -> u64 {
-    ZOBRIST_PIECES[sq][piece][color]
+pub fn compute_hash(board: &[Piece; 64]) -> u64 {
+    let mut hash = 0;
+    for (square, p) in board.iter().enumerate() {
+        let p = *p as usize;
+        if p != 0 {
+            hash ^= get_zobrist(square, p);
+        }
+    }
+    hash
+}
+pub fn update_hash(mut hash: u64, step: Step) -> u64 {
+    match step {
+        Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
+            let pix = (p as usize) - 1;
+            hash ^= get_zobrist(source as usize, pix); // xor out
+            hash ^= get_zobrist(dest as usize, pix); // xor in
+        }
+        Step::Place(p, sq) | Step::Remove(p, sq) => {
+            let pix = (p as usize) - 1;
+            hash ^= get_zobrist(sq as usize, pix); // xor in / out
+        }
+        _ => {}
+    }
+    hash
+}
+fn get_zobrist(sq: usize, piece: usize) -> u64 {
+    //unimplemented!()
+    ZOBRIST_PIECES[sq][piece]
 }
 
 pub fn write_zobrist(f: &mut File) {
@@ -40,21 +67,16 @@ pub fn write_zobrist(f: &mut File) {
 
     write!(
         f,
-        "const ZOBRIST_PIECES: [[[u64; NUM_SQUARES]; NUM_PIECES]; NUM_COLORS] = [[[\n"
+        "const ZOBRIST_PIECES: [[u64; NUM_SQUARES]; NUM_PIECES] = [[\n"
     )
     .unwrap();
-    for i in 0..NUM_COLORS {
-        for j in 0..NUM_PIECES {
-            for _ in 0..NUM_SQUARES {
-                write!(f, "    {},\n", rng.next_u64()).unwrap();
-            }
-            if j != NUM_PIECES - 1 {
-                write!(f, "   ], [\n").unwrap();
-            }
+    for j in 0..NUM_PIECES {
+        for _ in 0..NUM_SQUARES {
+            write!(f, "    {},\n", rng.next_u64()).unwrap();
         }
-        if i != NUM_COLORS - 1 {
-            write!(f, "  ]], [[\n").unwrap();
+        if j != NUM_PIECES - 1 {
+            write!(f, "   ], [\n").unwrap();
         }
     }
-    write!(f, "]]];\n\n").unwrap();
+    write!(f, "]];\n\n").unwrap();
 }

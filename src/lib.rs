@@ -4,7 +4,7 @@ pub mod zobrist;
 #[cfg(test)]
 mod tests {
     use crate::position;
-    use crate::position::{neighbors_of, Piece, Position, Step};
+    use crate::position::{neighbors_of, Piece, Position, Side, Step};
     #[test]
     fn new_start() {
         let op = "Ra1 Db1 Rc1 Rd1 De1 Rf1 Cg1 Rh1 Ra2 Hb2 Cc2 Ed2 Me2 Rf2 Hg2 Rh2
@@ -37,30 +37,43 @@ mod tests {
             "dc2e",
             format!("{}", Step::Move(position::Piece::BDog, 10, 11))
         );
-        let steps = pos.gen_steps();
-        let correct_steps: HashSet<_> = include_str!("test_games/moves.txt")
-            .to_string()
-            .lines()
-            .map(|s| s.to_string())
-            .collect();
-        println!("Number of steps: {}", steps.len());
-        let found_steps: HashSet<_> = steps.iter().map(|s| format!("{}", s)).collect();
-        // for s in steps {
-        //     println!("{}", s);
-        // }
-        let left = correct_steps.difference(&found_steps);
-        println!("Correct but not found: ");
-        for val in left {
-            println!("{}", val);
+        let white_steps = include_str!("test_games/steps1.txt");
+        let black_steps = include_str!("test_games/steps2.txt");
+        for side in &[Side::White, Side::Black] {
+            pos.side = *side;
+            let steps = pos.gen_steps();
+            let correct_steps = {
+                if let Side::White = side {
+                    white_steps
+                } else {
+                    black_steps
+                }
+            };
+            let correct_steps: HashSet<_> = correct_steps
+                .to_string()
+                .lines()
+                .map(|s| s.to_string())
+                .collect();
+            println!("Number of steps: {}", steps.len());
+            let found_steps: HashSet<_> = steps.iter().map(|s| format!("{}", s)).collect();
+            // for s in steps {
+            //     println!("{}", s);
+            // }
+            let left = correct_steps.difference(&found_steps);
+            println!("Correct but not found: ");
+            for val in left {
+                println!("{}", val);
+            }
+            let right = found_steps.difference(&correct_steps);
+            println!("\nFound but not correct: ");
+            for val in right {
+                println!("{}", val)
+            }
+            let index = position::alg_to_index(&['f', '3']).unwrap();
+            let lsb = position::index_to_lsb(index as u8);
+            assert_eq!(position::Piece::WHorse, pos.pieces[index]);
         }
-        let right = found_steps.difference(&correct_steps);
-        println!("\nFound but not correct: ");
-        for val in right {
-            println!("{}", val)
-        }
-        let index = position::alg_to_index(&['f', '3']).unwrap();
-        let lsb = position::index_to_lsb(index as u8);
-        assert_eq!(position::Piece::WHorse, pos.pieces[index]);
+
         //assert!(lsb & pos.bitboards[0] == 0)
     }
     #[test]
@@ -85,12 +98,12 @@ mod tests {
         println!("{} -> {}", source, dest);
         assert_eq!(format!("{}", step), "Cc2s".to_string());
     }
-    // #[test]
-    // fn gen_zobrist() {
-    //     let name = concat!(file!(), ".zobrist");
-    //     let mut f = std::fs::File::create(name).unwrap();
-    //     crate::zobrist::write_zobrist(&mut f);
-    // }
+    #[test]
+    fn gen_zobrist() {
+        let name = concat!(file!(), ".zobrist");
+        let mut f = std::fs::File::create(name).unwrap();
+        crate::zobrist::write_zobrist(&mut f);
+    }
     #[test]
     fn test_cleanup() {
         cleanup_gameroom_logs("/home/justin/Downloads/allgames201301.txt");
