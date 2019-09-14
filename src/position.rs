@@ -6,7 +6,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::fmt;
 
-use crate::zobrist::{compute_hash, update_hash};
+use crate::zobrist::{color_hash, compute_hash, update_hash};
 //const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
@@ -32,12 +32,8 @@ const NOT_H_FILE: u64 = !H_FILE;
 // const TRAP_C3_IX: u8 = 21;
 // const TRAP_F6_IX: u8 = 42;
 // const TRAP_C6_IX: u8 = 45;
-
-const INDEX64: [usize; 64] = [
-    0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38,
-    32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31, 22, 10, 45, 25,
-    39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63,
-]; // Used for bitscanning
+const TRAP_INDICES: [usize; 4] = [18, 21, 42, 45];
+const TRAP_NEIGHBORS: [u64; 4] = [0x40A0400, 0x20502000, 0x40A0400000000, 0x20502000000000];
 
 pub trait Bitboard {
     fn bitscan_forward(self) -> usize;
@@ -48,10 +44,7 @@ pub trait Bitboard {
 impl Bitboard for u64 {
     /// Determines the square index of an isolated bit
     fn bitscan_forward(self) -> usize {
-        // const DEBRUIJIN64: u64 = 0x03f79d71b4cb0a89;
         assert!(self != 0);
-        //INDEX64[(((self ^ (self - 1)) * DEBRUIJIN64) >> 58) as usize]
-        // INDEX64[((self * DEBRUIJIN64) >> 58) as usize]
         self.tzcnt() as usize
     }
     fn isolate_lsb(self) -> u64 {
@@ -185,17 +178,20 @@ impl fmt::Display for Step {
 #[derive(Clone)]
 pub struct Position {
     pub side: Side,
-    pub steps_left: i32,
+    pub steps_left: u8,
     pub placement: [u64; 2], // white, black bitboards
     pub bitboards: [u64; 13],
     pub last_step: Option<Step>,
     pub pieces: [Piece; 64],
     pub initial_hash: u64,
     pub current_hash: u64,
+    pub white_threefold: u64,
+    pub black_threefold: u64,
+    pub repeated_plies: u8, // 0, 1, 2, 3
 }
 
 impl Position {
-    pub fn new(side: Side, steps_left: i32, bitboards: [u64; 13]) -> Position {
+    pub fn new(side: Side, steps_left: u8, bitboards: [u64; 13]) -> Position {
         let mut placement: [u64; 2] = [0, 0];
         let mut pieces: [Piece; 64] = [Piece::Empty; 64];
         for pix in 1..13 {
@@ -223,9 +219,12 @@ impl Position {
             pieces,
             initial_hash: hash,
             current_hash: hash,
+            white_threefold: 0,
+            black_threefold: 0,
+            repeated_plies: 0,
         }
     }
-    pub fn from_pieces(side: Side, steps_left: i32, pieces: [Piece; 64]) -> Position {
+    pub fn from_pieces(side: Side, steps_left: u8, pieces: [Piece; 64]) -> Position {
         let mut placement: [u64; 2] = [0, 0];
         let mut bitboards: [u64; 13] = [0; 13];
         let mut bit_index = 1;
@@ -249,6 +248,9 @@ impl Position {
             pieces,
             initial_hash: hash,
             current_hash: hash,
+            white_threefold: 0,
+            black_threefold: 0,
+            repeated_plies: 0,
         }
     }
     pub fn from_pos_notation(notation: String) -> Result<Position, Error> {
@@ -432,7 +434,7 @@ impl Position {
         }
         moves
     }
-    pub fn do_step(&mut self, step: Step) {
+    pub fn do_step(&mut self, step: Step) -> Option<Step> {
         // Todo finish
         match step {
             Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
@@ -449,22 +451,76 @@ impl Position {
                 }
                 self.bitboards[0] ^= change;
                 // Check traps
-                for trap_sq in &[18, 21, 42, 45] {
+                for (index, trap_sq) in TRAP_INDICES.iter().enumerate() {
                     let pix = self.pieces[*trap_sq] as usize;
-                    let color = {
+                    let friendly_neighbors = {
                         if pix == 0 {
                             continue; // We don't care if trap is empty
                         } else if pix <= 6 {
-                            0
+                            self.placement[0] & TRAP_NEIGHBORS[index]
                         } else {
-                            1
+                            self.placement[1] & TRAP_NEIGHBORS[index]
                         }
                     };
-
+                    if friendly_neighbors == 0 {
+                        return Some(Step::Remove(
+                            Piece::from_u8(pix as u8).unwrap(),
+                            *trap_sq as u8,
+                        ));
+                    }
                 }
+                self.steps_left -= 1;
             }
-            _ => {}
+            Step::Place(p, sq) => {
+                // Todo figure out steps left in the opening phase
+                let pix = p as usize;
+                self.pieces[sq as usize] = p;
+                let change = index_to_lsb(sq);
+                // xor out relevant changes
+                self.bitboards[pix] ^= change;
+                if pix <= 6 {
+                    self.placement[0] ^= change;
+                } else {
+                    self.placement[1] ^= change;
+                }
+                self.bitboards[0] ^= change;
+            }
+            Step::Remove(p, sq) => {
+                let pix = p as usize;
+                self.pieces[sq as usize] = Piece::Empty;
+                let change = index_to_lsb(sq);
+                // xor out relevant changes
+                self.bitboards[pix] ^= change;
+                if pix <= 6 {
+                    self.placement[0] ^= change;
+                } else {
+                    self.placement[1] ^= change;
+                }
+                self.bitboards[0] ^= change;
+            }
+            Step::Pass => {
+                self.end_turn();
+                return None; // No need to check for end of step clean up
+            }
         }
+        self.current_hash = update_hash(self.current_hash, step);
+        if self.steps_left == 0 {
+            self.end_turn();
+        } else {
+            self.last_step = Some(step);
+        }
+        None
+    }
+    pub fn end_turn(&mut self) {
+        self.steps_left = 4;
+        self.side = match self.side {
+            Side::White => Side::Black,
+            Side::Black => Side::White,
+        };
+        self.current_hash ^= color_hash(self.side);
+        self.initial_hash = self.current_hash;
+        self.last_step = None;
+        // Todo repetitions
     }
     pub fn from_opening_str(opening: &str) -> Option<Position> {
         let lines: Vec<&str> = opening.lines().collect();
@@ -512,6 +568,9 @@ impl Position {
             pieces,
             initial_hash: hash,
             current_hash: hash,
+            white_threefold: 0,
+            black_threefold: 0,
+            repeated_plies: 0,
         })
     }
 }

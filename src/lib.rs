@@ -98,12 +98,12 @@ mod tests {
         println!("{} -> {}", source, dest);
         assert_eq!(format!("{}", step), "Cc2s".to_string());
     }
-    #[test]
-    fn gen_zobrist() {
-        let name = concat!(file!(), ".zobrist");
-        let mut f = std::fs::File::create(name).unwrap();
-        crate::zobrist::write_zobrist(&mut f);
-    }
+    // #[test]
+    // fn gen_zobrist() {
+    //     let name = concat!(file!(), ".zobrist");
+    //     let mut f = std::fs::File::create(name).unwrap();
+    //     crate::zobrist::write_zobrist(&mut f);
+    // }
     #[test]
     fn test_cleanup() {
         cleanup_gameroom_logs("/home/justin/Downloads/allgames201301.txt");

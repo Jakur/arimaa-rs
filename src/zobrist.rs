@@ -5,7 +5,7 @@ use rand::SeedableRng;
 use std::fs::File;
 use std::io::Write;
 
-use crate::position::{Piece, Step, Side};
+use crate::position::{Piece, Side, Step};
 
 const NUM_PIECES: usize = 12; // Empty is not counted
 const NUM_SQUARES: usize = 64;
@@ -40,6 +40,12 @@ pub fn update_hash(mut hash: u64, step: Step) -> u64 {
         _ => {}
     }
     hash
+}
+pub fn color_hash(color: Side) -> u64 {
+    match color {
+        Side::White => SIDE_TO_MOVE[0],
+        Side::Black => SIDE_TO_MOVE[1],
+    }
 }
 fn get_zobrist(sq: usize, piece: usize) -> u64 {
     //unimplemented!()
