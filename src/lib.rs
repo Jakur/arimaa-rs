@@ -72,6 +72,15 @@ mod tests {
             let index = position::alg_to_index(&['f', '3']).unwrap();
             let lsb = position::index_to_lsb(index as u8);
             assert_eq!(position::Piece::WHorse, pos.pieces[index]);
+            match side {
+                Side::White => {}
+                Side::Black => {
+                    let mut fake_pos = pos.clone();
+                    fake_pos.steps_left = 2;
+                    fake_pos.last_step = None;
+                    crate::game::Move::all_moves(&fake_pos);
+                }
+            }
         }
 
         //assert!(lsb & pos.bitboards[0] == 0)

@@ -368,13 +368,24 @@ impl Position {
             // Consider pull
             Some(Step::Move(p, source, _dest)) => {
                 let puller_type = p as u8;
-                let colorless = puller_type as usize - (6 * opp_index);
+                let colorless = puller_type as usize - (6 * player_index);
                 if colorless > 1 {
                     // is not rabbit
                     // Pulling piece must be strictly stronger, hence - 2
-                    let candidates = neighbors_of(index_to_lsb(source))
-                        & self.placement[opp_index]
-                        & !stronger[colorless - 2];
+
+                    let candidates = {
+                        assert!(colorless <= 6);
+                        if colorless != 100000 {
+                            neighbors_of(index_to_lsb(source))
+                                & self.placement[opp_index]
+                                & !stronger[colorless - 2]
+                        } else {
+                            // neighbors_of(index_to_lsb(source))
+                            //     & self.placement[opp_index]
+                            //     & !self.bitboards[opp_index * 6 + 6] // Not elephant
+                            unimplemented!()
+                        }
+                    };
                     for lsb in PieceIter::new(candidates) {
                         let sq = lsb.bitscan_forward();
                         moves.push(Step::Move(self.pieces[sq], sq as u8, source));
@@ -396,9 +407,6 @@ impl Position {
                 }
             };
             for p in PieceIter::new(movements) {
-                if p.bitscan_forward() == 21 {
-                    dbg!(format!("WTF! Movements: {:#b}", movements));
-                }
                 let sq = lsb.bitscan_forward();
                 moves.push(Step::Move(
                     self.pieces[sq],
@@ -434,14 +442,15 @@ impl Position {
         }
         moves
     }
-    pub fn do_step(&mut self, step: Step) -> Option<Step> {
+    pub fn do_step(&mut self, step: Step, full_log: bool) -> Option<Step> {
         // Todo finish
         match step {
             Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
+                self.steps_left -= 1;
                 let pix = p as usize;
                 self.pieces[source as usize] = Piece::Empty;
                 self.pieces[dest as usize] = p;
-                let change = index_to_lsb(source) & index_to_lsb(dest);
+                let change = index_to_lsb(source) | index_to_lsb(dest);
                 // xor out relevant changes
                 self.bitboards[pix] ^= change;
                 if pix <= 6 {
@@ -451,28 +460,41 @@ impl Position {
                 }
                 self.bitboards[0] ^= change;
                 // Check traps
+                let mut out = None;
                 for (index, trap_sq) in TRAP_INDICES.iter().enumerate() {
                     let pix = self.pieces[*trap_sq] as usize;
                     let friendly_neighbors = {
                         if pix == 0 {
                             continue; // We don't care if trap is empty
                         } else if pix <= 6 {
-                            self.placement[0] & TRAP_NEIGHBORS[index]
+                            let x = self.placement[0] & TRAP_NEIGHBORS[index];
+                            //dbg!(x);
+                            x
                         } else {
                             self.placement[1] & TRAP_NEIGHBORS[index]
                         }
                     };
                     if friendly_neighbors == 0 {
-                        return Some(Step::Remove(
-                            Piece::from_u8(pix as u8).unwrap(),
-                            *trap_sq as u8,
-                        ));
+                        let next_step =
+                            Step::Remove(Piece::from_u8(pix as u8).unwrap(), *trap_sq as u8);
+                        if full_log {
+                            out = Some(next_step); // For explicit notation
+                        } else {
+                            self.do_step(next_step, false); // In playouts
+                        }
+                        break; // Each step can affect one trap at most
                     }
                 }
-                self.steps_left -= 1;
+                self.current_hash = update_hash(self.current_hash, step);
+                if self.steps_left == 0 {
+                    self.end_turn();
+                } else {
+                    self.last_step = Some(step); // This is the only push case
+                }
+                return out;
             }
             Step::Place(p, sq) => {
-                // Todo figure out steps left in the opening phase
+                // Todo figure out steps left and hash in the opening phase
                 let pix = p as usize;
                 self.pieces[sq as usize] = p;
                 let change = index_to_lsb(sq);
@@ -497,17 +519,11 @@ impl Position {
                     self.placement[1] ^= change;
                 }
                 self.bitboards[0] ^= change;
+                self.current_hash = update_hash(self.current_hash, step);
             }
             Step::Pass => {
                 self.end_turn();
-                return None; // No need to check for end of step clean up
             }
-        }
-        self.current_hash = update_hash(self.current_hash, step);
-        if self.steps_left == 0 {
-            self.end_turn();
-        } else {
-            self.last_step = Some(step);
         }
         None
     }

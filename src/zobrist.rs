@@ -15,9 +15,9 @@ include!("table_zobrist.rs");
 pub fn compute_hash(board: &[Piece; 64], side: Side) -> u64 {
     let mut hash = 0;
     for (square, p) in board.iter().enumerate() {
-        let p = *p as usize;
-        if p != 0 {
-            hash ^= get_zobrist(square, p);
+        let pix = *p as usize;
+        if pix != 0 {
+            hash ^= get_zobrist(square, pix);
         }
     }
     match side {
@@ -29,12 +29,13 @@ pub fn compute_hash(board: &[Piece; 64], side: Side) -> u64 {
 pub fn update_hash(mut hash: u64, step: Step) -> u64 {
     match step {
         Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
-            let pix = (p as usize) - 1;
+            //dbg!(p);
+            let pix = p as usize;
             hash ^= get_zobrist(source as usize, pix); // xor out
             hash ^= get_zobrist(dest as usize, pix); // xor in
         }
         Step::Place(p, sq) | Step::Remove(p, sq) => {
-            let pix = (p as usize) - 1;
+            let pix = p as usize;
             hash ^= get_zobrist(sq as usize, pix); // xor in / out
         }
         _ => {}
@@ -49,7 +50,9 @@ pub fn color_hash(color: Side) -> u64 {
 }
 fn get_zobrist(sq: usize, piece: usize) -> u64 {
     //unimplemented!()
-    ZOBRIST_PIECES[sq][piece]
+    // dbg!(sq);
+    // dbg!(piece);
+    ZOBRIST_PIECES[piece - 1][sq]
 }
 
 pub fn write_zobrist(f: &mut File) {
