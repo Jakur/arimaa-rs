@@ -1,4 +1,4 @@
-use failure::{bail, format_err, Error};
+use failure::{bail, ensure, format_err, Error};
 
 use bitintr::Tzcnt;
 
@@ -106,6 +106,7 @@ impl fmt::Display for Piece {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Direction {
     North,
     East,
@@ -113,14 +114,32 @@ pub enum Direction {
     West,
 }
 
-impl fmt::Display for Direction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let dir = match self {
+impl From<Direction> for char {
+    fn from(item: Direction) -> char {
+        match item {
             Direction::North => 'n',
             Direction::East => 'e',
             Direction::South => 's',
             Direction::West => 'w',
-        };
+        }
+    }
+}
+
+impl From<char> for Direction {
+    fn from(item: char) -> Direction {
+        match item {
+            'n' => Direction::North,
+            'e' => Direction::East,
+            's' => Direction::South,
+            'w' => Direction::West,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl fmt::Display for Direction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let dir = char::from(*self);
         write!(f, "{}", dir)
     }
 }
@@ -132,6 +151,30 @@ pub enum Step {
     Place(Piece, u8),    // Piece Dest
     Remove(Piece, u8),   // Piece Square (due to trap)
     Pass,
+}
+
+impl Step {
+    pub fn from_notation(input: &str) -> Step {
+        let mut chars: Vec<_> = input.chars().collect();
+        let piece = Piece::from_u8(piece_char_index(chars[0])).unwrap();
+        let sq = alg_to_index(&chars[1..=2]).unwrap() as u8;
+        if let Some(c) = chars.get(4) {
+            if *c == 'x' {
+                return Step::Remove(piece, sq);
+            }
+            let dir = Direction::from(*c);
+            let dest = match dir {
+                Direction::East => sq + 1,
+                Direction::North => sq + 8,
+                Direction::West => sq - 1,
+                Direction::South => sq - 8,
+            };
+            Step::Move(piece, sq, dest)
+        } else {
+            // Place is the only 3 char possibility
+            Step::Place(piece, sq)
+        }
+    }
 }
 
 impl fmt::Display for Step {
@@ -252,6 +295,28 @@ impl Position {
             black_threefold: 0,
             repeated_plies: 0,
         }
+    }
+    pub fn from_small_notation(notation: String, side: Side) -> Result<Position, Error> {
+        let mut pieces: [Piece; 64] = [Piece::Empty; 64];
+        let vec: Vec<_> = notation
+            .chars()
+            .filter(|c| *c != '[' && *c != ']')
+            .filter_map(|c| Piece::from_u8(piece_char_index(c)))
+            .collect();
+        ensure!(vec.len() == 64, format_err!("Wrong number of pieces!"));
+        for (index, piece) in vec.into_iter().enumerate() {
+            pieces[index] = piece;
+        }
+        Ok(Self::from_pieces(side, 4, pieces))
+    }
+    pub fn to_small_notation(&self) -> String {
+        let mut vec = Vec::with_capacity(66);
+        vec.push('[');
+        for p in self.pieces.iter() {
+            vec.push(char::from(*p));
+        }
+        vec.push(']');
+        vec.into_iter().collect()
     }
     pub fn from_pos_notation(notation: String) -> Result<Position, Error> {
         let lines: Vec<_> = notation.lines().collect();

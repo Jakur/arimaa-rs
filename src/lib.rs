@@ -3,8 +3,11 @@ pub mod position;
 pub mod zobrist;
 #[cfg(test)]
 mod tests {
+    use crate::game::Move;
     use crate::position;
     use crate::position::{neighbors_of, Piece, Position, Side, Step};
+
+    static POS1: &'static str = include_str!("test_games/pos1.txt");
     #[test]
     fn new_start() {
         let op = "Ra1 Db1 Rc1 Rd1 De1 Rf1 Cg1 Rh1 Ra2 Hb2 Cc2 Ed2 Me2 Rf2 Hg2 Rh2
@@ -22,17 +25,69 @@ mod tests {
         let total = position::total_moves();
         assert!(512 < total && total < 1569); // Somewhat loose bounds for sanity check
     }
+    #[test]
+    fn test_small_notation() {
+        let note = "[ rr r r m h  e c r  r r h dr c dE H    M R RRHR D C  C D R RR R ]";
+        let p = Position::from_small_notation(note.to_string(), Side::Black);
+        assert!(p.is_ok());
+        //println!("{}", p.unwrap().to_pos_notation());
+        assert_eq!(note, p.unwrap().to_small_notation());
+    }
+
+    fn call_perl(fname: &str) -> String {
+        use std::process::Command;
+        let prefix = "/home/justin/Downloads/ArimaaMoveCount";
+        let res = Command::new(format!("{}/mc", prefix))
+            .arg(format!("{}/{}", prefix, fname))
+            .output()
+            .expect("Failed!")
+            .stdout;
+        let res = std::str::from_utf8(&res[..]).expect("Invalid UTF-8 string");
+        //println!("{}", res);
+        res.into()
+    }
+
+    fn parse_perl(input: String) -> (Vec<Move>, Vec<String>) {
+        let split: Vec<_> = input.split("are unique\n\n").collect();
+        println!("{}", split[1]);
+        let mut moves = Vec::new();
+        let mut position_strings = Vec::new();
+        for (count, line) in split[1].lines().enumerate() {
+            if count % 2 == 0 {
+                // Move
+                moves.push(Move::from_line(line))
+            } else {
+                position_strings.push(line.to_string());
+            }
+        }
+        (moves, position_strings)
+    }
+    #[test]
+    fn test_perl_call() {
+        //use std::collections::HashSet;
+        let (moves, position_strings) = parse_perl(call_perl("pos2"));
+        //let hashset: HashSet<_> = position_strings.into_iter().collect();
+        let init_pos = Position::from_pos_notation(POS1.to_string()).unwrap();
+        for (index, m) in moves.into_iter().enumerate() {
+            let mut pos = init_pos.clone();
+            // Initial position includes the first two steps already
+            for step in m.steps[2..].iter() {
+                pos.do_step(*step, false);
+            }
+            assert_eq!(pos.to_small_notation(), position_strings[index]);
+        }
+        //println!("{}", hashset.len());
+    }
 
     #[test]
     fn test_pos_notation() {
         use std::collections::HashSet;
-        let text_pos = include_str!("test_games/pos1.txt");
-        let mut pos = Position::from_pos_notation(text_pos.to_string()).unwrap();
+        let mut pos = Position::from_pos_notation(POS1.to_string()).unwrap();
         pos.steps_left = 1;
         println!("{:?}", &pos.pieces[..]);
         let note = pos.to_pos_notation();
         println!("{}", note);
-        assert_eq!(text_pos, note);
+        assert_eq!(POS1, note);
         assert_eq!(
             "dc2e",
             format!("{}", Step::Move(position::Piece::BDog, 10, 11))
