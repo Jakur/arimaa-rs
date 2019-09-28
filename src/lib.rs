@@ -49,7 +49,7 @@ mod tests {
 
     fn parse_perl(input: String) -> (Vec<Move>, Vec<String>) {
         let split: Vec<_> = input.split("are unique\n\n").collect();
-        println!("{}", split[1]);
+        //println!("{}", split[1]);
         let mut moves = Vec::new();
         let mut position_strings = Vec::new();
         for (count, line) in split[1].lines().enumerate() {
@@ -67,14 +67,35 @@ mod tests {
         //use std::collections::HashSet;
         let (moves, position_strings) = parse_perl(call_perl("pos2"));
         //let hashset: HashSet<_> = position_strings.into_iter().collect();
+        println!("{}", position::alg_to_index(&['a', '8']).unwrap());
         let init_pos = Position::from_pos_notation(POS1.to_string()).unwrap();
-        for (index, m) in moves.into_iter().enumerate() {
+        for (m, pos_string) in moves.into_iter().zip(position_strings.into_iter()) {
             let mut pos = init_pos.clone();
             // Initial position includes the first two steps already
             for step in m.steps[2..].iter() {
                 pos.do_step(*step, false);
             }
-            assert_eq!(pos.to_small_notation(), position_strings[index]);
+            let long = Position::from_small_notation(pos_string.clone(), Side::Black)
+                .unwrap()
+                .to_pos_notation();
+            // let left = pos.to_pos_notation();
+            // let right = long.lines();
+            // let s1 = match m.steps.get(2) {
+            //     Some(s) => format!("{}", s),
+            //     None => " ".to_string(),
+            // };
+            // let s2 = match m.steps.get(3) {
+            //     Some(s) => format!("{}", s),
+            //     None => " ".to_string(),
+            // };
+            // println!("Attempting: {} {}", s1, s2);
+            // for (l, r) in left.lines().zip(right) {
+            //     println!("{}     {}", l, r);
+            // }
+            // println!("{}", pos.to_pos_notation());
+            // println!("{}", long);
+            assert_eq!(pos.to_pos_notation(), long);
+            assert_eq!(pos.to_small_notation(), pos_string);
         }
         //println!("{}", hashset.len());
     }

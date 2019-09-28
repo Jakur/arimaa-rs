@@ -155,10 +155,10 @@ pub enum Step {
 
 impl Step {
     pub fn from_notation(input: &str) -> Step {
-        let mut chars: Vec<_> = input.chars().collect();
+        let chars: Vec<_> = input.chars().collect();
         let piece = Piece::from_u8(piece_char_index(chars[0])).unwrap();
         let sq = alg_to_index(&chars[1..=2]).unwrap() as u8;
-        if let Some(c) = chars.get(4) {
+        if let Some(c) = chars.get(3) {
             if *c == 'x' {
                 return Step::Remove(piece, sq);
             }
@@ -304,7 +304,7 @@ impl Position {
             .filter_map(|c| Piece::from_u8(piece_char_index(c)))
             .collect();
         ensure!(vec.len() == 64, format_err!("Wrong number of pieces!"));
-        for (index, piece) in vec.into_iter().enumerate() {
+        for (index, piece) in NotationIter::new().zip(vec.into_iter()) {
             pieces[index] = piece;
         }
         Ok(Self::from_pieces(side, 4, pieces))
@@ -312,8 +312,8 @@ impl Position {
     pub fn to_small_notation(&self) -> String {
         let mut vec = Vec::with_capacity(66);
         vec.push('[');
-        for p in self.pieces.iter() {
-            vec.push(char::from(*p));
+        for i in NotationIter::new() {
+            vec.push(char::from(self.pieces[i]))
         }
         vec.push(']');
         vec.into_iter().collect()
@@ -716,6 +716,34 @@ impl Iterator for PieceIter {
         let lsb = self.bitboard.isolate_lsb();
         self.bitboard = self.bitboard ^ lsb;
         Some(lsb)
+    }
+}
+
+pub struct NotationIter {
+    index: usize,
+}
+
+impl NotationIter {
+    pub fn new() -> NotationIter {
+        NotationIter {
+            index: 71, // Hack to wrap back to a8 first
+        }
+    }
+}
+
+impl Iterator for NotationIter {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<usize> {
+        if self.index % 8 == 7 {
+            if self.index == 7 {
+                return None;
+            }
+            self.index -= 15;
+        } else {
+            self.index += 1;
+        }
+        Some(self.index)
     }
 }
 
