@@ -99,6 +99,36 @@ mod tests {
         }
         //println!("{}", hashset.len());
     }
+    #[test]
+    fn test_step_gen() {
+        use std::collections::HashMap;
+        let mut pos = Position::from_pos_notation(POS1.to_string()).unwrap();
+        pos.steps_left = 2;
+        pos.side = Side::Black;
+        let (correct_steps, correct_positions) = parse_perl(call_perl("pos2"));
+        let c_pos_set: HashMap<_, _> = correct_positions
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.as_str(), i))
+            .collect();
+        //let c_move_set: HashMap<_, _> = correct_steps.iter().enumerate().map(|(i, m)|, ())
+        let found_positions = crate::game::Move::all_positions(&pos);
+        assert_eq!(c_pos_set.len(), found_positions.len());
+        println!(
+            "Correct: {}     Found: {}",
+            c_pos_set.len(),
+            found_positions.len()
+        );
+        let mut counter = 0;
+        for (found_p, _moves) in found_positions {
+            if !c_pos_set.contains_key(found_p.to_small_notation().as_str()) {
+                counter += 1;
+                // println!("{}", found_p.to_pos_notation());
+                //break;
+            }
+        }
+        assert_eq!(counter, 0);
+    }
 
     #[test]
     fn test_pos_notation() {
@@ -146,17 +176,7 @@ mod tests {
                 println!("{}", val)
             }
             let index = position::alg_to_index(&['f', '3']).unwrap();
-            let lsb = position::index_to_lsb(index as u8);
             assert_eq!(position::Piece::WHorse, pos.pieces[index]);
-            match side {
-                Side::White => {}
-                Side::Black => {
-                    let mut fake_pos = pos.clone();
-                    fake_pos.steps_left = 2;
-                    fake_pos.last_step = None;
-                    crate::game::Move::all_moves(&fake_pos);
-                }
-            }
         }
 
         //assert!(lsb & pos.bitboards[0] == 0)

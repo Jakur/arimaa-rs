@@ -5,6 +5,7 @@ use bitintr::Tzcnt;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::zobrist::{color_hash, compute_hash, update_hash};
 //const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
@@ -144,7 +145,7 @@ impl fmt::Display for Direction {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Step {
     Move(Piece, u8, u8), // Piece Source Dest
     Push(Piece, u8, u8), // Piece Source Dest of Pushed Piece
@@ -231,6 +232,22 @@ pub struct Position {
     pub white_threefold: u64,
     pub black_threefold: u64,
     pub repeated_plies: u8, // 0, 1, 2, 3
+}
+
+impl PartialEq for Position {
+    fn eq(&self, other: &Self) -> bool {
+        self.steps_left == other.steps_left
+            && self.side == other.side
+            && self.last_step == other.last_step
+            && self.bitboards == other.bitboards
+    }
+}
+impl Eq for Position {}
+
+impl Hash for Position {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.current_hash.hash(state);
+    }
 }
 
 impl Position {

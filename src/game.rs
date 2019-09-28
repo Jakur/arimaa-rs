@@ -5,63 +5,45 @@ use std::collections::{hash_map::Entry, HashMap, HashSet};
 pub struct Game {
     pub position: Position,
 }
-
+#[derive(Clone)]
 pub struct Move {
     pub steps: Vec<Step>,
 }
 
 impl Move {
+    pub fn new(steps: Vec<Step>) -> Move {
+        Move { steps }
+    }
     pub fn from_line(line: &str) -> Move {
         let steps = line.split(" ").map(|s| Step::from_notation(s)).collect();
         Move { steps }
     }
-    pub fn all_moves(position: &Position) -> Vec<Move> {
-        // Todo more robust
-        let mut total = 0;
-        let mut unique_pos = HashSet::new();
-        let mut unique_string_pos = HashSet::new();
-        let mut hashmap = HashMap::new();
-        let one_left = position.gen_steps().into_iter().map(|s| {
-            println!("Attempting: {}", s);
-            let mut p = position.clone();
-            p.do_step(s, false);
-            p
-        });
-        println!("Length of one_left {}", one_left.len());
-        //return Vec::new();
-        for p in one_left {
-            if let Side::Black = p.side {
-                //println!("Black to move...");
-                total += 1;
-                continue;
-            }
-            // println!("Position: {}", p.to_pos_notation());
-            let fin = p.gen_steps().into_iter().map(|s| {
-                total += 1;
-                let mut p = position.clone();
-                p.do_step(s, false);
-                p
-            });
-            for f in fin {
-                let small_note = f.to_small_notation();
-                unique_pos.insert(f.current_hash);
-                let entry = hashmap.entry(f.current_hash);
+    pub fn all_positions(position: &Position) -> HashMap<Position, Vec<Move>> {
+        let init_side = position.side;
+        let mut in_progress = vec![(position.clone(), Move::new(vec![]))];
+        let mut finished: HashMap<_, Vec<Move>> = HashMap::new();
+        while in_progress.len() != 0 {
+            let (pos, mov) = in_progress.pop().unwrap();
+            if pos.side != init_side {
+                let entry = finished.entry(pos);
                 match entry {
-                    Entry::Occupied(entry) => {
-                        if small_note != *entry.get() {
-                            println!("Inconsistent!");
-                        }
+                    Entry::Occupied(mut entry) => {
+                        entry.get_mut().push(mov);
                     }
                     Entry::Vacant(entry) => {
-                        entry.insert(f.to_small_notation());
+                        entry.insert(vec![mov]);
                     }
                 }
-                unique_string_pos.insert(small_note);
+                continue;
+            }
+            for s in pos.gen_steps().into_iter() {
+                let mut next_pos = pos.clone();
+                let mut next_move = mov.clone();
+                next_pos.do_step(s, false);
+                next_move.steps.push(s);
+                in_progress.push((next_pos, next_move));
             }
         }
-        println!("Total moves: {}", total);
-        println!("Unique moves: {}", unique_pos.len());
-        println!("Unique pos strings: {}", unique_string_pos.len());
-        vec![]
+        finished
     }
 }
