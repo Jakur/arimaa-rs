@@ -39,7 +39,7 @@ impl Move {
             for s in pos.gen_steps().into_iter() {
                 let mut next_pos = pos.clone();
                 let mut next_move = mov.clone();
-                next_pos.do_step(s, false);
+                next_pos.do_step(s);
                 next_move.steps.push(s);
                 in_progress.push((next_pos, next_move));
             }

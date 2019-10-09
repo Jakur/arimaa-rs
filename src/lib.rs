@@ -73,7 +73,7 @@ mod tests {
             let mut pos = init_pos.clone();
             // Initial position includes the first two steps already
             for step in m.steps[2..].iter() {
-                pos.do_step(*step, false);
+                pos.do_step(*step);
             }
             let long = Position::from_small_notation(pos_string.clone(), Side::Black)
                 .unwrap()

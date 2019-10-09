@@ -36,6 +36,12 @@ const NOT_H_FILE: u64 = !H_FILE;
 const TRAP_INDICES: [usize; 4] = [18, 21, 42, 45];
 const TRAP_NEIGHBORS: [u64; 4] = [0x40A0400, 0x20502000, 0x40A0400000000, 0x20502000000000];
 
+pub enum EndState {
+    WhiteWin,
+    BlackWin,
+    Neither,
+}
+
 pub trait Bitboard {
     fn bitscan_forward(self) -> usize;
     fn isolate_lsb(self) -> u64;
@@ -60,6 +66,15 @@ impl Bitboard for u64 {
 pub enum Side {
     White = 0,
     Black = 1,
+}
+
+impl Side {
+    fn opposite(&self) -> Side {
+        match &self {
+            Side::White => Side::Black,
+            Side::Black => Side::White,
+        }
+    }
 }
 
 #[repr(u8)]
@@ -524,9 +539,9 @@ impl Position {
         }
         moves
     }
-    pub fn do_step(&mut self, step: Step, full_log: bool) -> Option<Step> {
+    pub fn do_step(&mut self, step: Step) -> EndState {
         // Todo finish
-        match step {
+        let res = match step {
             Step::Move(p, source, dest) | Step::Push(p, source, dest) => {
                 self.steps_left -= 1;
                 let pix = p as usize;
@@ -542,7 +557,6 @@ impl Position {
                 }
                 self.bitboards[0] ^= change;
                 // Check traps
-                let mut out = None;
                 for (index, trap_sq) in TRAP_INDICES.iter().enumerate() {
                     let pix = self.pieces[*trap_sq] as usize;
                     let friendly_neighbors = {
@@ -559,21 +573,17 @@ impl Position {
                     if friendly_neighbors == 0 {
                         let next_step =
                             Step::Remove(Piece::from_u8(pix as u8).unwrap(), *trap_sq as u8);
-                        if full_log {
-                            out = Some(next_step); // For explicit notation
-                        } else {
-                            self.do_step(next_step, false); // In playouts
-                        }
+                        self.do_step(next_step);
                         break; // Each step can affect one trap at most
                     }
                 }
                 self.current_hash = update_hash(self.current_hash, step);
                 if self.steps_left == 0 {
-                    self.end_turn();
+                    self.end_turn()
                 } else {
                     self.last_step = Some(step); // This is the only push case
+                    EndState::Neither
                 }
-                return out;
             }
             Step::Place(p, sq) => {
                 // Todo figure out steps left and hash in the opening phase
@@ -588,6 +598,7 @@ impl Position {
                     self.placement[1] ^= change;
                 }
                 self.bitboards[0] ^= change;
+                EndState::Neither
             }
             Step::Remove(p, sq) => {
                 let pix = p as usize;
@@ -602,14 +613,19 @@ impl Position {
                 }
                 self.bitboards[0] ^= change;
                 self.current_hash = update_hash(self.current_hash, step);
+                EndState::Neither
             }
             Step::Pass => {
-                self.end_turn();
+                self.end_turn()
             }
-        }
-        None
+        };
+        res
     }
-    pub fn end_turn(&mut self) {
+    pub fn end_turn(&mut self) -> EndState {
+        if self.current_hash == self.initial_hash {
+            // Null move, which is illegal
+
+        }
         self.steps_left = 4;
         self.side = match self.side {
             Side::White => Side::Black,
@@ -618,6 +634,7 @@ impl Position {
         self.current_hash ^= color_hash(self.side);
         self.initial_hash = self.current_hash;
         self.last_step = None;
+        EndState::Neither
         // Todo repetitions
     }
     pub fn from_opening_str(opening: &str) -> Option<Position> {
