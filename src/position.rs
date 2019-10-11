@@ -468,7 +468,9 @@ impl Position {
             Some(Step::Push(p, source, _dest)) => {
                 let pushed_piece_id = p as u8;
                 let colorless = pushed_piece_id as usize - (6 * opp_index);
-                let followers = neighbors_of(index_to_lsb(source)) & stronger[colorless - 1];
+                let followers = neighbors_of(index_to_lsb(source))
+                    & stronger[colorless - 1]
+                    & self.placement[player_index];
                 for lsb in PieceIter::new(followers) {
                     let sq = lsb.bitscan_forward();
                     moves.push(Step::Move(self.pieces[sq], sq as u8, source));
@@ -524,7 +526,7 @@ impl Position {
                 // To be pushed we must have a stronger opponent piece adjacent
                 // to us, and we must have an empty tile adjacent to us
                 let opp_pix = pix + 6 * opp_index;
-                let pushing_candidates = stronger[pix - 1] & self.placement[player_index];
+                let pushing_candidates = stronger[pix - 1] & self.placement[player_index] & !frozen;
                 let pushable = (neighbors_of(pushing_candidates) & self.bitboards[opp_pix])
                     & neighbors_of(self.bitboards[0]);
                 let push_iter = PieceIter::new(pushable);

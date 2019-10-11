@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn test_step_gen() {
         use std::collections::HashMap;
-        let mut pos = Position::from_pos_notation(POS1.to_string()).unwrap();
+        let pos = Position::from_pos_notation(POS1.to_string()).unwrap();
         // pos.steps_left = 2;
         // pos.side = Side::Black;
         let (correct_steps, correct_positions) = parse_perl(call_perl("pos"));
