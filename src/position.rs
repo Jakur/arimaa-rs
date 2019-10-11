@@ -16,10 +16,10 @@ const A_FILE: u64 = 0x8080808080808080;
 const H_FILE: u64 = 0x0101010101010101;
 const NOT_A_FILE: u64 = !A_FILE;
 const NOT_H_FILE: u64 = !H_FILE;
-// const RANK_1: u64 = 0xFF;
+const RANK_1: u64 = 0xFF;
 // const RANK_2: u64 = 0xFF00;
 // const RANK_7: u64 = 0xFF000000000000;
-// const RANK_8: u64 = 0xFF00000000000000;
+const RANK_8: u64 = 0xFF00000000000000;
 // const NOT_RANK_1: u64 = !RANK_1;
 // const NOT_RANK_8: u64 = !RANK_8;
 // const NOT_EDGE: u64 = NOT_A_FILE & NOT_H_FILE & NOT_RANK_1 & NOT_RANK_8;
@@ -36,10 +36,20 @@ const NOT_H_FILE: u64 = !H_FILE;
 const TRAP_INDICES: [usize; 4] = [18, 21, 42, 45];
 const TRAP_NEIGHBORS: [u64; 4] = [0x40A0400, 0x20502000, 0x40A0400000000, 0x20502000000000];
 
+#[derive(PartialEq)]
 pub enum EndState {
     WhiteWin,
     BlackWin,
     Neither,
+}
+
+impl From<Side> for EndState {
+    fn from(item: Side) -> EndState {
+        match item {
+            Side::White => EndState::WhiteWin,
+            Side::Black => EndState::BlackWin,
+        }
+    }
 }
 
 pub trait Bitboard {
@@ -69,7 +79,7 @@ pub enum Side {
 }
 
 impl Side {
-    fn opposite(&self) -> Side {
+    pub fn opposite(&self) -> Side {
         match &self {
             Side::White => Side::Black,
             Side::Black => Side::White,
@@ -193,6 +203,12 @@ impl Step {
     }
 }
 
+impl fmt::Debug for Step {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        <fmt::Display>::fmt(&self, f)
+    }
+}
+
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -244,9 +260,8 @@ pub struct Position {
     pub pieces: [Piece; 64],
     pub initial_hash: u64,
     pub current_hash: u64,
-    pub white_threefold: u64,
-    pub black_threefold: u64,
-    pub repeated_plies: u8, // 0, 1, 2, 3
+    pub opp_last: u64, // previous position
+    pub my_last: u64,  // one previous to that
 }
 
 impl PartialEq for Position {
@@ -294,9 +309,8 @@ impl Position {
             pieces,
             initial_hash: hash,
             current_hash: hash,
-            white_threefold: 0,
-            black_threefold: 0,
-            repeated_plies: 0,
+            opp_last: 0,
+            my_last: 0,
         }
     }
     pub fn from_pieces(side: Side, steps_left: u8, pieces: [Piece; 64]) -> Position {
@@ -323,9 +337,8 @@ impl Position {
             pieces,
             initial_hash: hash,
             current_hash: hash,
-            white_threefold: 0,
-            black_threefold: 0,
-            repeated_plies: 0,
+            opp_last: 0,
+            my_last: 0,
         }
     }
     pub fn from_small_notation(notation: String, side: Side) -> Result<Position, Error> {
@@ -472,16 +485,9 @@ impl Position {
 
                     let candidates = {
                         assert!(colorless <= 6);
-                        if colorless != 100000 {
-                            neighbors_of(index_to_lsb(source))
-                                & self.placement[opp_index]
-                                & !stronger[colorless - 2]
-                        } else {
-                            // neighbors_of(index_to_lsb(source))
-                            //     & self.placement[opp_index]
-                            //     & !self.bitboards[opp_index * 6 + 6] // Not elephant
-                            unimplemented!()
-                        }
+                        neighbors_of(index_to_lsb(source))
+                            & self.placement[opp_index]
+                            & !stronger[colorless - 2]
                     };
                     for lsb in PieceIter::new(candidates) {
                         let sq = lsb.bitscan_forward();
@@ -534,9 +540,10 @@ impl Position {
                 }
             }
         }
-        if self.steps_left != 4 {
-            moves.push(Step::Pass); // Todo checking zobrist
-        }
+        // if self.steps_left != 4 {
+        //     moves.push(Step::Pass); // Todo checking zobrist
+        // }
+        moves.push(Step::Pass);
         moves
     }
     pub fn do_step(&mut self, step: Step) -> EndState {
@@ -615,22 +622,43 @@ impl Position {
                 self.current_hash = update_hash(self.current_hash, step);
                 EndState::Neither
             }
-            Step::Pass => {
-                self.end_turn()
-            }
+            Step::Pass => self.end_turn(),
         };
         res
     }
     pub fn end_turn(&mut self) -> EndState {
-        if self.current_hash == self.initial_hash {
-            // Null move, which is illegal
-
+        if self.current_hash == self.initial_hash || self.current_hash == self.my_last {
+            // Null move or repetition
+            return self.side.opposite().into();
+        }
+        match self.side {
+            Side::White => {
+                if self.bitboards[1] & RANK_8 != 0 {
+                    return EndState::WhiteWin;
+                } else if self.bitboards[7] & RANK_1 != 0 {
+                    return EndState::BlackWin;
+                } else if self.bitboards[7] == 0 {
+                    return EndState::WhiteWin;
+                } else if self.bitboards[1] == 0 {
+                    return EndState::BlackWin;
+                }
+            }
+            Side::Black => {
+                if self.bitboards[7] & RANK_1 != 0 {
+                    return EndState::BlackWin;
+                } else if self.bitboards[1] & RANK_8 != 0 {
+                    return EndState::WhiteWin;
+                } else if self.bitboards[1] == 0 {
+                    return EndState::BlackWin;
+                } else if self.bitboards[7] == 0 {
+                    return EndState::WhiteWin;
+                }
+            }
         }
         self.steps_left = 4;
-        self.side = match self.side {
-            Side::White => Side::Black,
-            Side::Black => Side::White,
-        };
+        self.my_last = self.opp_last;
+        self.opp_last = self.initial_hash;
+        self.side = self.side.opposite();
         self.current_hash ^= color_hash(self.side);
         self.initial_hash = self.current_hash;
         self.last_step = None;
@@ -683,9 +711,8 @@ impl Position {
             pieces,
             initial_hash: hash,
             current_hash: hash,
-            white_threefold: 0,
-            black_threefold: 0,
-            repeated_plies: 0,
+            opp_last: 0,
+            my_last: 0,
         })
     }
 }

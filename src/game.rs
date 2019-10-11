@@ -1,11 +1,11 @@
-use crate::position::{Position, Side, Step};
+use crate::position::{EndState, Position, Side, Step};
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 //use std::fmt;
 
 pub struct Game {
     pub position: Position,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Move {
     pub steps: Vec<Step>,
 }
@@ -20,6 +20,7 @@ impl Move {
     }
     pub fn all_positions(position: &Position) -> HashMap<Position, Vec<Move>> {
         let init_side = position.side;
+        let loss = EndState::from(init_side.opposite());
         let mut in_progress = vec![(position.clone(), Move::new(vec![]))];
         let mut finished: HashMap<_, Vec<Move>> = HashMap::new();
         while in_progress.len() != 0 {
@@ -39,7 +40,10 @@ impl Move {
             for s in pos.gen_steps().into_iter() {
                 let mut next_pos = pos.clone();
                 let mut next_move = mov.clone();
-                next_pos.do_step(s);
+                let status = next_pos.do_step(s);
+                if status == loss {
+                    continue; // Suppose we don't want to include auto-losses here
+                }
                 next_move.steps.push(s);
                 in_progress.push((next_pos, next_move));
             }
