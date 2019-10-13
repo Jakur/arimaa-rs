@@ -480,22 +480,28 @@ impl Position {
             // Consider pull
             Some(Step::Move(p, source, _dest)) => {
                 let puller_type = p as u8;
-                let colorless = puller_type as usize - (6 * player_index);
-                if colorless > 1 {
-                    // is not rabbit
-                    // Pulling piece must be strictly stronger, hence - 2
+                // Can only pull if last piece to move is ours
+                if (puller_type <= 6 && player_index == 0)
+                    || (puller_type >= 7 && player_index == 1)
+                {
+                    let colorless = puller_type as usize - (6 * player_index);
+                    if colorless > 1 {
+                        // is not rabbit
+                        // Pulling piece must be strictly stronger, hence - 2
 
-                    let candidates = {
-                        assert!(colorless <= 6);
-                        neighbors_of(index_to_lsb(source))
-                            & self.placement[opp_index]
-                            & !stronger[colorless - 2]
-                    };
-                    for lsb in PieceIter::new(candidates) {
-                        let sq = lsb.bitscan_forward();
-                        moves.push(Step::Move(self.pieces[sq], sq as u8, source));
+                        let candidates = {
+                            assert!(colorless <= 6);
+                            neighbors_of(index_to_lsb(source))
+                                & self.placement[opp_index]
+                                & !stronger[colorless - 2]
+                        };
+                        for lsb in PieceIter::new(candidates) {
+                            let sq = lsb.bitscan_forward();
+                            moves.push(Step::Move(self.pieces[sq], sq as u8, source));
+                        }
                     }
                 }
+
             }
             _ => {}
         }

@@ -103,6 +103,7 @@ mod tests {
         use std::collections::HashMap;
         let pos = Position::from_pos_notation(POS1.to_string()).unwrap();
         // pos.steps_left = 2;
+        // 68891 moves from black's pos
         // pos.side = Side::Black;
         let (correct_steps, correct_positions) = parse_perl(call_perl("pos"));
         let c_pos_set: HashMap<_, _> = correct_positions
