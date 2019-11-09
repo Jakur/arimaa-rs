@@ -8,6 +8,7 @@ mod tests {
     use crate::position::{neighbors_of, Piece, Position, Side, Step};
 
     static POS1: &'static str = include_str!("test_games/pos1.txt");
+    static POS2: &'static str = include_str!("test_games/pos2.txt");
     #[test]
     fn new_start() {
         let op = "Ra1 Db1 Rc1 Rd1 De1 Rf1 Cg1 Rh1 Ra2 Hb2 Cc2 Ed2 Me2 Rf2 Hg2 Rh2
@@ -33,12 +34,18 @@ mod tests {
         //println!("{}", p.unwrap().to_pos_notation());
         assert_eq!(note, p.unwrap().to_small_notation());
     }
-
-    fn call_perl(fname: &str) -> String {
+    fn call_perl(fname: &str, local: bool) -> String {
         use std::process::Command;
         let prefix = "/home/justin/Downloads/ArimaaMoveCount";
+        let file = {
+            if local {
+                format!("{}/{}", prefix, fname)
+            } else {
+                format!("{}", fname)
+            }
+        };
         let res = Command::new(format!("{}/mc", prefix))
-            .arg(format!("{}/{}", prefix, fname))
+            .arg(file)
             .output()
             .expect("Failed!")
             .stdout;
@@ -65,7 +72,7 @@ mod tests {
     #[test]
     fn test_perl_call() {
         //use std::collections::HashSet;
-        let (moves, position_strings) = parse_perl(call_perl("pos2"));
+        let (moves, position_strings) = parse_perl(call_perl("pos2", true));
         //let hashset: HashSet<_> = position_strings.into_iter().collect();
         println!("{}", position::alg_to_index(&['a', '8']).unwrap());
         let init_pos = Position::from_pos_notation(POS1.to_string()).unwrap();
@@ -99,13 +106,31 @@ mod tests {
         //println!("{}", hashset.len());
     }
     #[test]
+    fn short_step_test() {
+        let mut pos: Vec<_> = vec![POS1, POS1]
+            .into_iter()
+            .map(|s| Position::from_pos_notation(s.to_string()).unwrap())
+            .collect();
+        pos[1].side = Side::Black;
+        let count = [88040 as usize, 68891];
+        for (p, c) in pos.into_iter().zip(count.iter()) {
+            let found_positions = crate::game::Move::all_positions(&p);
+            assert_eq!(found_positions.len(), *c);
+        }
+    }
+    #[test]
     fn test_step_gen() {
         use std::collections::HashMap;
-        let pos = Position::from_pos_notation(POS1.to_string()).unwrap();
+        let pos = Position::from_pos_notation(POS2.to_string()).unwrap();
         // pos.steps_left = 2;
         // 68891 moves from black's pos
+        // 88040 moves from white's pos
         // pos.side = Side::Black;
-        let (correct_steps, correct_positions) = parse_perl(call_perl("pos"));
+        //18542
+        let (correct_steps, correct_positions) = parse_perl(call_perl(
+            "/home/justin/Code/rust/arimaa-rs/src/test_games/pos2.txt",
+            false,
+        ));
         let c_pos_set: HashMap<_, _> = correct_positions
             .iter()
             .enumerate()

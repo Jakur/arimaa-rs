@@ -8,7 +8,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use crate::zobrist::{color_hash, compute_hash, update_hash};
-//const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
+const ALL_BITS_SET: u64 = 0xFFFFFFFFFFFFFFFF;
 
 const A_FILE: u64 = 0x8080808080808080;
 // const B_FILE: u64 = 0x4040404040404040;
@@ -17,8 +17,8 @@ const H_FILE: u64 = 0x0101010101010101;
 const NOT_A_FILE: u64 = !A_FILE;
 const NOT_H_FILE: u64 = !H_FILE;
 const RANK_1: u64 = 0xFF;
-// const RANK_2: u64 = 0xFF00;
-// const RANK_7: u64 = 0xFF000000000000;
+const RANK_2: u64 = 0xFF00;
+const RANK_7: u64 = 0xFF000000000000;
 const RANK_8: u64 = 0xFF00000000000000;
 // const NOT_RANK_1: u64 = !RANK_1;
 // const NOT_RANK_8: u64 = !RANK_8;
@@ -262,6 +262,7 @@ pub struct Position {
     pub current_hash: u64,
     pub opp_last: u64, // previous position
     pub my_last: u64,  // one previous to that
+    pub plies: u16,
 }
 
 impl PartialEq for Position {
@@ -311,6 +312,24 @@ impl Position {
             current_hash: hash,
             opp_last: 0,
             my_last: 0,
+            plies: 16,
+        }
+    }
+    pub fn new_empty() -> Position {
+        let mut bitboards = [0; 13];
+        bitboards[0] = ALL_BITS_SET;
+        Position {
+            side: Side::White,
+            steps_left: 4,
+            placement: [0; 2],
+            bitboards,
+            last_step: None,
+            pieces: [Piece::Empty; 64],
+            initial_hash: 0,
+            current_hash: 0,
+            opp_last: 0,
+            my_last: 0,
+            plies: 0,
         }
     }
     pub fn from_pieces(side: Side, steps_left: u8, pieces: [Piece; 64]) -> Position {
@@ -339,6 +358,7 @@ impl Position {
             current_hash: hash,
             opp_last: 0,
             my_last: 0,
+            plies: 16,
         }
     }
     pub fn from_small_notation(notation: String, side: Side) -> Result<Position, Error> {
@@ -448,6 +468,31 @@ impl Position {
         let mut moves = Vec::new();
         let player_index = self.side as usize;
         let opp_index = (player_index + 1) % 2;
+        // Opening
+        if self.plies <= 15 {
+            let mut num = match self.plies % 8 {
+                0 | 1 => 2,
+                2 | 3 => 3,
+                4 | 5 => 4,
+                6 => 5,
+                7 => 6,
+                _ => unreachable!(),
+            };
+            let placement = {
+                if self.plies >= 8 {
+                    num += 6; // Black piece side effect
+                    (RANK_7 | RANK_8) & self.bitboards[0]
+                } else {
+                    (RANK_1 | RANK_2) & self.bitboards[0]
+                }
+            };
+            let piece = Piece::from_u8(num).unwrap();
+            let iter = PieceIter::new(placement);
+            for val in iter {
+                moves.push(Step::Place(piece, val.bitscan_forward() as u8))
+            }
+            return moves;
+        }
         // Compute frozen
         let wneighbors = neighbors_of(self.placement[0]);
         let bneighbors = neighbors_of(self.placement[1]);
@@ -721,6 +766,7 @@ impl Position {
             current_hash: hash,
             opp_last: 0,
             my_last: 0,
+            plies: 16,
         })
     }
 }
