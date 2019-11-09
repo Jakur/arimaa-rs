@@ -11,6 +11,7 @@ num-traits = "0.2"
 rand = "0.6"
 failure = "*"
 bitintr = "0.3.0"
+mcts = "0.3.0"
 
 [dev-dependencies]
 regex = "1"

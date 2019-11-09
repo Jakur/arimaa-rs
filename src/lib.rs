@@ -1,14 +1,25 @@
 pub mod game;
 pub mod position;
+
+pub mod search;
 pub mod zobrist;
 #[cfg(test)]
 mod tests {
     use crate::game::Move;
     use crate::position;
     use crate::position::{neighbors_of, Piece, Position, Side, Step};
+    use crate::search;
 
     static POS1: &'static str = include_str!("test_games/pos1.txt");
     static POS2: &'static str = include_str!("test_games/pos2.txt");
+    static POS3: &'static str = include_str!("test_games/pos3.txt");
+    #[test]
+    fn test_goal_in_two() {
+        let pos = Position::from_pos_notation(POS3.to_string());
+        let game = search::ArimaaGame::new(pos.unwrap());
+        let res = search::simple_search(game);
+        println!("{:?}", res);
+    }
     #[test]
     fn new_start() {
         let op = "Ra1 Db1 Rc1 Rd1 De1 Rf1 Cg1 Rh1 Ra2 Hb2 Cc2 Ed2 Me2 Rf2 Hg2 Rh2

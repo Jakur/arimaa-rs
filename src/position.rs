@@ -36,7 +36,7 @@ const RANK_8: u64 = 0xFF00000000000000;
 const TRAP_INDICES: [usize; 4] = [18, 21, 42, 45];
 const TRAP_NEIGHBORS: [u64; 4] = [0x40A0400, 0x20502000, 0x40A0400000000, 0x20502000000000];
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum EndState {
     WhiteWin,
     BlackWin,
@@ -329,7 +329,7 @@ impl Position {
             current_hash: 0,
             opp_last: 0,
             my_last: 0,
-            plies: 0,
+            plies: 0,            
         }
     }
     pub fn from_pieces(side: Side, steps_left: u8, pieces: [Piece; 64]) -> Position {
@@ -358,7 +358,7 @@ impl Position {
             current_hash: hash,
             opp_last: 0,
             my_last: 0,
-            plies: 16,
+            plies: 16,            
         }
     }
     pub fn from_small_notation(notation: String, side: Side) -> Result<Position, Error> {
@@ -766,7 +766,7 @@ impl Position {
             current_hash: hash,
             opp_last: 0,
             my_last: 0,
-            plies: 16,
+            plies: 16,            
         })
     }
 }
